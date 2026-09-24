@@ -1,0 +1,15 @@
+{
+  "name": "phonemail",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PhoneMail — email platform using phone numbers as email IDs",
+  "workspaces": ["backend", "web"],
+  "scripts": {
+    "dev:backend": "npm --workspace backend run dev",
+    "dev:web": "npm --workspace web run dev",
+    "dev:mobile": "cd mobile && npx expo start",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down"
+  },
+  "engines": { "node": ">=20" }
+}

@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "PhoneMail",
+    "slug": "phonemail",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#075E54"
+    },
+    "android": {
+      "package": "com.phonemail.app"
+    },
+    "ios": {
+      "bundleIdentifier": "com.phonemail.app"
+    },
+    "plugins": []
+  }
+}

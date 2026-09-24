@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.expo/
+*.db
+.env
+data/
+npm-debug.log*
