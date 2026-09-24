@@ -1,26 +1,34 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { requestOtp, verifyOtp, setToken } from "../api/client.js";
+import { Link, useNavigate } from "react-router-dom";
+import { registerAccount, setToken } from "../api/client.js";
+import PasswordField from "../components/PasswordField.jsx";
+import StrengthMeter from "../components/StrengthMeter.jsx";
+import ChangePassword from "./ChangePassword.jsx";
 
 export default function Register() {
-  const [step, setStep] = useState("phone"); // phone -> otp
   const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
-  const [devCode, setDevCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [tos, setTos] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [forceChange, setForceChange] = useState(false);
   const navigate = useNavigate();
 
-  const requestCode = async (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     setError("");
     const digits = phone.replace(/[^\d]/g, "");
     if (digits.length < 7) return setError("Enter a valid phone number.");
+    if (password.length < 8) return setError("Password must be at least 8 characters.");
+    if (password !== confirmPassword) return setError("Passwords do not match.");
+    if (!tos) return setError("Please accept the Terms of Service.");
     setLoading(true);
     try {
-      const { data } = await requestOtp(digits);
-      setDevCode(data.devCode || "");
-      setStep("otp");
+      const { data } = await registerAccount(digits, password, confirmPassword);
+      setToken(data.token);
+      if (data.mustChangePassword) setForceChange(true);
+      else navigate("/");
     } catch (err) {
       setError(err?.response?.data?.error || err.message);
     } finally {
@@ -28,68 +36,56 @@ export default function Register() {
     }
   };
 
-  const verify = async (e) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      const digits = phone.replace(/[^\d]/g, "");
-      const { data } = await verifyOtp(digits, code);
-      setToken(data.token);
-      navigate("/");
-    } catch (err) {
-      setError(err?.response?.data?.error || err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (forceChange) return <ChangePassword onDone={() => navigate("/")} />;
 
   return (
     <div style={styles.page}>
       <div style={styles.card}>
         <h1 style={styles.logo}>PhoneMail</h1>
-        <p style={styles.tagline}>Your phone number is your email address.</p>
-
-        {step === "phone" && (
-          <form onSubmit={requestCode}>
-            <label style={styles.label}>Phone number</label>
-            <input
-              style={styles.input}
-              placeholder="9876543210"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              autoFocus
-            />
-            {error && <p style={styles.error}>{error}</p>}
-            <button style={styles.button} disabled={loading}>{loading ? "Sending…" : "Next"}</button>
-            <p style={styles.tos}>
-              By continuing, you agree to PhoneMail's{" "}
-              <a href="/terms.html" target="_blank" rel="noreferrer">Terms of Service</a>.
-            </p>
-          </form>
-        )}
-
-        {step === "otp" && (
-          <form onSubmit={verify}>
-            <label style={styles.label}>Enter OTP sent to +{phone}</label>
-            <input
-              style={styles.input}
-              placeholder="6-digit code"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              autoFocus
-            />
-            {devCode && <p style={styles.hint}>Dev mode code: {devCode}</p>}
-            {error && <p style={styles.error}>{error}</p>}
-            <button style={styles.button} disabled={loading}>{loading ? "Verifying…" : "Next"}</button>
-          </form>
-        )}
+        <p style={styles.tagline}>Create an account with your phone number and a password.</p>
+        <form onSubmit={submit}>
+          <label style={styles.label}>Phone number</label>
+          <input
+            style={styles.input}
+            placeholder="9876543210"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            autoComplete="tel"
+            autoFocus
+          />
+          <label style={styles.label}>Password</label>
+          <PasswordField value={password} onChange={setPassword} autoComplete="new-password" />
+          <StrengthMeter password={password} />
+          <label style={styles.label}>Confirm password</label>
+          <PasswordField
+            value={confirmPassword}
+            onChange={setConfirmPassword}
+            placeholder="Confirm password"
+            autoComplete="new-password"
+          />
+          <label style={styles.checkRow}>
+            <input type="checkbox" checked={tos} onChange={(e) => setTos(e.target.checked)} />
+            <span>
+              I agree to PhoneMail's{" "}
+              <a href="/terms.html" target="_blank" rel="noreferrer">
+                Terms of Service
+              </a>
+            </span>
+          </label>
+          {error && <p style={styles.error}>{error}</p>}
+          <button style={styles.button} disabled={loading}>
+            {loading ? "Creating…" : "Create account"}
+          </button>
+        </form>
+        <p style={styles.switch}>
+          Already have an account? <Link to="/login">Log in</Link>
+        </p>
       </div>
     </div>
   );
 }
 
-const styles = {
+export const styles = {
   page: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" },
   card: { background: "#fff", padding: "40px", borderRadius: 12, boxShadow: "0 1px 6px rgba(0,0,0,0.15)", width: 360 },
   logo: { margin: 0, color: "#1a73e8" },
@@ -99,5 +95,6 @@ const styles = {
   button: { width: "100%", padding: "10px", background: "#1a73e8", color: "#fff", border: "none", borderRadius: 6, fontSize: 15, cursor: "pointer" },
   error: { color: "#d93025", fontSize: 13, marginBottom: 12 },
   hint: { color: "#188038", fontSize: 13, marginBottom: 12 },
-  tos: { fontSize: 12, color: "#5f6368", marginTop: 16 },
+  checkRow: { display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: "#5f6368", marginBottom: 16 },
+  switch: { fontSize: 13, color: "#5f6368", marginTop: 16, textAlign: "center" },
 };

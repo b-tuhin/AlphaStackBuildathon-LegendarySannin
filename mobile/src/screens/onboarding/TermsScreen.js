@@ -12,8 +12,7 @@ export default function TermsScreen({ navigation }) {
         <Text style={styles.title}>Terms & Privacy Policy</Text>
         <Text style={styles.body}>
           PhoneMail uses your phone number as your email address (yournumber@phonemail.com).
-          By continuing you agree that we may send you an OTP via SMS or an automated call to
-          verify your number, that messages sent to your PhoneMail address may trigger an SMS
+          By continuing you agree that messages sent to your PhoneMail address may trigger an SMS
           notification if you don't have the app installed, and that your phone number will be
           visible to people you message. Read the full Terms of Service and Privacy Policy on
           our website before proceeding.

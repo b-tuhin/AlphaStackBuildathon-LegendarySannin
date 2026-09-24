@@ -4,8 +4,10 @@ import jwt from "jsonwebtoken";
 import { db } from "../db/database.js";
 import { config } from "../config.js";
 import { phoneToEmail } from "../smtp/mailEngine.js";
+import { hashPassword, generateTempPassword } from "../auth/password.js";
+import { sendSms } from "../telephony/notifier.js";
 
-export function createUserIfMissing(phone, via = "app") {
+export function createUserIfMissing(phone, via = "app", extras = {}) {
   const normalized = phone.replace(/[^\d]/g, "");
   let user = db.prepare(`SELECT * FROM users WHERE phone = ?`).get(normalized);
   if (user) return { user, created: false };
@@ -14,12 +16,32 @@ export function createUserIfMissing(phone, via = "app") {
     phone: normalized,
     email_address: phoneToEmail(normalized),
     created_via: via,
+    password_hash: extras.passwordHash ?? null,
+    must_change_password: extras.mustChangePassword ? 1 : 0,
   };
   db.prepare(
-    `INSERT INTO users (id, phone, email_address, created_via) VALUES (@id, @phone, @email_address, @created_via)`
+    `INSERT INTO users (id, phone, email_address, created_via, password_hash, must_change_password)
+     VALUES (@id, @phone, @email_address, @created_via, @password_hash, @must_change_password)`
   ).run(user);
   console.log(`[users] Created ${user.email_address} via ${via}`);
   return { user, created: true };
+}
+
+const tempPasswordSms = (user, tempPassword) =>
+  `Welcome to PhoneMail! Your email is ${user.email_address}. Temporary password: ${tempPassword}. Change it the first time you log in.`;
+
+/** IVR / inbound-SMS signup: create the account and issue a temporary password. */
+export function provisionTelephonyAccount(phone, via, { deliverSms = true } = {}) {
+  const existing = db.prepare(`SELECT * FROM users WHERE phone = ?`).get(String(phone).replace(/[^\d]/g, ""));
+  if (existing) return { user: existing, created: false };
+
+  const tempPassword = generateTempPassword();
+  const { user, created } = createUserIfMissing(phone, via, {
+    passwordHash: hashPassword(tempPassword),
+    mustChangePassword: true,
+  });
+  if (deliverSms) sendSms(user.phone, tempPasswordSms(user, tempPassword));
+  return { user, created, tempPassword };
 }
 
 export function requireAuth(req, res, next) {
@@ -35,8 +57,8 @@ export function requireAuth(req, res, next) {
 const router = Router();
 
 router.get("/me", requireAuth, (req, res) => {
-  const user = db.prepare(`SELECT id, phone, email_address, display_name, aliases FROM users WHERE id = ?`).get(req.user.sub);
-  res.json({ ...user, aliases: JSON.parse(user.aliases) });
+  const user = db.prepare(`SELECT id, phone, email_address, display_name, aliases, must_change_password FROM users WHERE id = ?`).get(req.user.sub);
+  res.json({ ...user, aliases: JSON.parse(user.aliases), mustChangePassword: !!user.must_change_password });
 });
 
 router.patch("/me", requireAuth, (req, res) => {

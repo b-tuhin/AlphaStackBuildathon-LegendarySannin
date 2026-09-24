@@ -2,14 +2,15 @@ PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS users (
-  id            TEXT PRIMARY KEY,
-  phone         TEXT NOT NULL UNIQUE,
-  email_address TEXT NOT NULL UNIQUE,
-  display_name  TEXT,
-  password_hash TEXT,
-  aliases       TEXT NOT NULL DEFAULT '[]',
-  created_via   TEXT NOT NULL DEFAULT 'app',
-  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  id                    TEXT PRIMARY KEY,
+  phone                 TEXT NOT NULL UNIQUE,
+  email_address         TEXT NOT NULL UNIQUE,
+  display_name          TEXT,
+  password_hash         TEXT,
+  must_change_password  INTEGER NOT NULL DEFAULT 0,
+  aliases               TEXT NOT NULL DEFAULT '[]',
+  created_via           TEXT NOT NULL DEFAULT 'app',
+  created_at            TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- Threads: 1:1 (participant_a/participant_b) OR group (is_group=1, participants JSON array)
@@ -60,7 +61,13 @@ CREATE TABLE IF NOT EXISTS device_registrations (
   UNIQUE (user_id, push_token)
 );
 
-CREATE TABLE IF NOT EXISTS otps (
+CREATE TABLE IF NOT EXISTS login_attempts (
+  phone        TEXT PRIMARY KEY,
+  window_start INTEGER NOT NULL,
+  count        INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS password_resets (
   phone      TEXT PRIMARY KEY,
   code       TEXT NOT NULL,
   attempts   INTEGER NOT NULL DEFAULT 0,

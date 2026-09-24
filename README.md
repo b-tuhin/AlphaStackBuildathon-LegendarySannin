@@ -21,27 +21,32 @@ docker compose up -d --build
 | mailhog   | http://localhost:8025            | Inspect outbound SMTP relay (dev only)     |
 
 No Twilio account is required to demo: `TWILIO_MOCK=true` (the default) logs
-OTPs, IVR speech, and SMS notifications to the backend console instead of
-sending them, and `POST /auth/otp/request` also returns the code directly in
-the response body (`devCode`) in mock mode so the UI can display it.
+IVR speech, password-reset codes, and SMS notifications to the backend console
+instead of sending them. `POST /auth/password/reset-request` also returns the
+code directly in the response body (`resetCode`) in mock mode so you can
+complete a reset without a real SMS.
 
 ## How each requirement is met
 
 **Account creation**
 - IVR "press 1": `POST /webhooks/ivr` → `/webhooks/ivr/handle` (Twilio `<Gather>`), creates
-  the user from the caller's number.
-- Inbound SMS: `POST /webhooks/sms`, any text creates an account for the sender.
-- Web registration portal: two fields only — phone number, then OTP — with a
-  Terms of Service link, at `web/src/pages/Register.jsx`.
-- Password fallback: if OTP verification fails 3 times or expires, the API
-  responds `fallbackToPassword: true` and both clients route to a
-  password-login screen (`POST /auth/password/login`).
+  the user from the caller's number and SMSes a temporary password that must be
+  changed on first web/app login.
+- Inbound SMS: `POST /webhooks/sms`, any text creates an account for the sender and
+  replies with a temporary password.
+- Web portal: Register (`phone`, `password`, `confirmPassword`, ToS checkbox) and
+  Login (`phone`, `password`, forgot-password) at `web/src/pages/Register.jsx` and
+  `Login.jsx`. `POST /auth/register` and `POST /auth/login` issue a JWT.
+- Password reset: `POST /auth/password/reset-request` and `/auth/password/reset-confirm`
+  send a short-lived SMS code via the existing Twilio notifier.
+- Login rate limit: 5 attempts per 15 minutes per phone (SQLite `login_attempts`).
 
 **Mobile client (priority)** — `mobile/`
 - WhatsApp design tokens in `src/theme/whatsapp.js` (teal header, green
   accent, bubble colors) applied throughout.
-- Onboarding: Language → Terms → Phone number → OTP, auto-verifying once 6
-  digits are entered (`src/screens/onboarding/`).
+- Onboarding: Language → Terms → Phone number (SIM auto-fill if permitted) →
+  Create password; returning users get phone + password login with
+  "Forgot password?" (`src/screens/onboarding/`).
 - Inbox: full-width search bar, filter chips (All / Unread / Attachments /
   Favorites), a drawer combining Inbox+Sent with Drafts/Spam/Trash.
 - Chat-based inbox: every sender (or group) is one thread
@@ -53,8 +58,8 @@ the response body (`devCode`) in mock mode so the UI can display it.
   `mailEngine.js`'s group-thread resolution).
 
 **Web client** — `web/`
-- Single-screen onboarding: phone + OTP + Next, with a hyperlinked ToS
-  (`public/terms.html`).
+- Register and login screens: phone + password (show/hide, strength meter on
+  register), hyperlinked ToS, and forgot-password (`public/terms.html`).
 - Gmail-style three-pane layout: folder sidebar, email list, reading pane
   (`pages/Mail.jsx`), not the mobile chat view.
 - Profile & Settings screen for display name and alias IDs.
@@ -67,8 +72,7 @@ the response body (`devCode`) in mock mode so the UI can display it.
 
 **Technical**
 - Backend: Node.js/Express, `better-sqlite3`, `smtp-server` (local SMTP with
-  RFC 5322 phone→address mapping), `twilio` SDK, JWT auth, bcrypt password
-  fallback.
+  RFC 5322 phone→address mapping), `twilio` SDK, JWT auth, bcrypt passwords.
 - Fully dockerized: `docker compose up -d --build` brings up backend, web,
   mobile (Expo/Metro), and MailHog with a single command; the backend has a
   healthcheck other services `depends_on`.
@@ -77,15 +81,17 @@ the response body (`devCode`) in mock mode so the UI can display it.
 ## Verifying it works (curl)
 
 ```bash
-# 1. Request OTP (mock mode returns devCode)
-curl -X POST localhost:4000/auth/otp/request -H "Content-Type: application/json" -d '{"phone":"9876543210"}'
+# 1. Register (phone + password) -> account created + JWT issued
+curl -X POST localhost:4000/auth/register -H "Content-Type: application/json" \
+  -d '{"phone":"9876543210","password":"secret123","confirmPassword":"secret123"}'
 
-# 2. Verify OTP -> account created + JWT issued
-curl -X POST localhost:4000/auth/otp/verify -H "Content-Type: application/json" -d '{"phone":"9876543210","code":"<devCode>"}'
+# 2. Log in
+curl -X POST localhost:4000/auth/login -H "Content-Type: application/json" \
+  -d '{"phone":"9876543210","password":"secret123"}'
 
 # 3. Create a second user and message them
-curl -X POST localhost:4000/auth/otp/request -H "Content-Type: application/json" -d '{"phone":"9998887776"}'
-curl -X POST localhost:4000/auth/otp/verify -H "Content-Type: application/json" -d '{"phone":"9998887776","code":"<devCode2>"}'
+curl -X POST localhost:4000/auth/register -H "Content-Type: application/json" \
+  -d '{"phone":"9998887776","password":"secret123","confirmPassword":"secret123"}'
 curl -X POST localhost:4000/mail/send -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
   -d '{"to":"9998887776","subject":"Hello","text":"Hi from PhoneMail"}'
 
@@ -125,5 +131,5 @@ phonemail/
 - Attachments are accepted end-to-end in the schema/API but neither client
   has a file picker yet — `attachments` on `POST /mail/send` accepts
   pre-uploaded metadata for extension.
-- OTP delivery is SMS/voice via Twilio; no email-based OTP, since the whole
-  point of PhoneMail is phone-first identity.
+- Password reset uses SMS via Twilio (or the mock console in dev); there is no
+  email-based identity, since the whole point of PhoneMail is phone-first.

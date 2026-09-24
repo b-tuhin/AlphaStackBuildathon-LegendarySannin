@@ -7,8 +7,10 @@ export const config = {
   mailDomain: process.env.MAIL_DOMAIN || "phonemail.com",
   jwtSecret: process.env.JWT_SECRET || "phonemail_dev_secret",
   dbPath: process.env.DB_PATH || "./data/phonemail.db",
-  otpTtlMs: 5 * 60 * 1000,
-  otpMaxAttempts: 3,
+  resetCodeTtlMs: 15 * 60 * 1000,
+  resetMaxAttempts: 5,
+  loginWindowMs: 15 * 60 * 1000,
+  loginMaxAttempts: 5,
   twilio: {
     accountSid: process.env.TWILIO_ACCOUNT_SID || "",
     authToken: process.env.TWILIO_AUTH_TOKEN || "",

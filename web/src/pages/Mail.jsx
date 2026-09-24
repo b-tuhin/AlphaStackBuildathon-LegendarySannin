@@ -5,6 +5,7 @@ import EmailList from "../components/EmailList.jsx";
 import EmailView from "../components/EmailView.jsx";
 import ComposeModal from "../components/ComposeModal.jsx";
 import Settings from "./Settings.jsx";
+import ChangePassword from "./ChangePassword.jsx";
 import { getMe, getEmails, updateEmail } from "../api/client.js";
 
 export default function Mail() {
@@ -36,6 +37,8 @@ export default function Mail() {
   const filtered = query
     ? emails.filter((e) => `${e.subject} ${e.body_text} ${e.from_address}`.toLowerCase().includes(query.toLowerCase()))
     : emails;
+
+  if (me?.mustChangePassword) return <ChangePassword onDone={() => setMe({ ...me, mustChangePassword: false })} />;
 
   if (settingsOpen) return <Settings me={me} onBack={() => setSettingsOpen(false)} onUpdated={setMe} />;
 

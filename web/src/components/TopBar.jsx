@@ -4,7 +4,7 @@ import { clearToken } from "../api/client.js";
 
 export default function TopBar({ query, onQueryChange, me, onOpenSettings }) {
   const navigate = useNavigate();
-  const logout = () => { clearToken(); navigate("/register"); };
+  const logout = () => { clearToken(); navigate("/login"); };
 
   return (
     <header style={styles.header}>

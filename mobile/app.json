@@ -9,7 +9,8 @@
       "backgroundColor": "#075E54"
     },
     "android": {
-      "package": "com.phonemail.app"
+      "package": "com.phonemail.app",
+      "permissions": ["READ_PHONE_NUMBERS", "READ_PHONE_STATE"]
     },
     "ios": {
       "bundleIdentifier": "com.phonemail.app"

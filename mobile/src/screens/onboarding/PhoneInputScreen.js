@@ -1,31 +1,29 @@
-import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Alert } from "react-native";
 import { colors, spacing, typography } from "../../theme/whatsapp";
-import { requestOtp } from "../../api/client";
+import { tryReadSimPhone } from "../../utils/simPhone";
 
 export default function PhoneInputScreen({ navigation }) {
   const [phone, setPhone] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  const submit = async () => {
+  useEffect(() => {
+    (async () => {
+      const sim = await tryReadSimPhone();
+      if (sim) setPhone((current) => current || sim);
+    })();
+  }, []);
+
+  const submit = () => {
     const digits = phone.replace(/[^\d]/g, "");
     if (digits.length < 7) return Alert.alert("Invalid number", "Enter a valid phone number.");
-    setLoading(true);
-    try {
-      const { data } = await requestOtp(digits);
-      navigation.navigate("Otp", { phone: digits, devCode: data.devCode });
-    } catch (err) {
-      Alert.alert("Couldn't send OTP", err?.response?.data?.error || err.message);
-    } finally {
-      setLoading(false);
-    }
+    navigation.navigate("CreatePassword", { phone: digits });
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Enter your phone number</Text>
       <Text style={styles.subtitle}>
-        PhoneMail needs to verify your phone number. This becomes your email address.
+        This becomes your email address. We'll fill it from your SIM if you allow it — you can still edit it.
       </Text>
 
       <View style={styles.inputRow}>
@@ -41,8 +39,12 @@ export default function PhoneInputScreen({ navigation }) {
       </View>
       <Text style={styles.hint}>Your PhoneMail address will be {phone.replace(/[^\d]/g, "") || "……"}@phonemail.com</Text>
 
-      <TouchableOpacity style={styles.cta} onPress={submit} disabled={loading}>
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>Next</Text>}
+      <TouchableOpacity style={styles.cta} onPress={submit}>
+        <Text style={styles.ctaText}>Next</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={() => navigation.navigate("PasswordLogin")} style={{ marginTop: spacing.lg }}>
+        <Text style={styles.link}>Already have an account? Sign in</Text>
       </TouchableOpacity>
     </SafeAreaView>
   );
@@ -64,4 +66,5 @@ const styles = StyleSheet.create({
     borderRadius: 24, alignItems: "center",
   },
   ctaText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  link: { color: colors.primaryLight, fontWeight: "600", textAlign: "center" },
 });

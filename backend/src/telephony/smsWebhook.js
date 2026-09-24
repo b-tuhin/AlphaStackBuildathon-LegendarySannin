@@ -1,18 +1,18 @@
 import twilio from "twilio";
-import { createUserIfMissing } from "../routes/user.routes.js";
+import { provisionTelephonyAccount } from "../routes/user.routes.js";
 
 const { MessagingResponse } = twilio.twiml;
 
-/** POST /webhooks/sms — any inbound SMS creates an account */
+/** POST /webhooks/sms — any inbound SMS creates an account with a temp password */
 export function smsInbound(req, res) {
   const twiml = new MessagingResponse();
   const sender = (req.body.From || "").replace(/[^\d]/g, "");
 
   if (sender) {
-    const { user, created } = createUserIfMissing(sender, "sms");
+    const { user, created, tempPassword } = provisionTelephonyAccount(sender, "sms", { deliverSms: false });
     twiml.message(
       created
-        ? `Welcome to PhoneMail! Your email address is ${user.email_address}. Download the app or visit the web portal to get started.`
+        ? `Welcome to PhoneMail! Your email is ${user.email_address}. Temporary password: ${tempPassword}. Change it the first time you log in.`
         : `You already have a PhoneMail account: ${user.email_address}`
     );
   } else {

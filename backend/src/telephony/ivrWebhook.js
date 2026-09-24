@@ -1,5 +1,5 @@
 import twilio from "twilio";
-import { createUserIfMissing } from "../routes/user.routes.js";
+import { provisionTelephonyAccount } from "../routes/user.routes.js";
 
 const { VoiceResponse } = twilio.twiml;
 
@@ -19,10 +19,10 @@ export function ivrHandle(req, res) {
   const caller = (req.body.From || "").replace(/[^\d]/g, "");
 
   if (digit === "1" && caller) {
-    const { user, created } = createUserIfMissing(caller, "ivr");
+    const { user, created } = provisionTelephonyAccount(caller, "ivr");
     twiml.say(
       created
-        ? `Your PhoneMail account has been created. Your email address is ${user.email_address.split("").join(" ")}.`
+        ? `Your PhoneMail account has been created. Your email address is ${user.email_address.split("").join(" ")}. A temporary password has been sent by text message. You must change it the first time you log in.`
         : "You already have a PhoneMail account. Goodbye."
     );
   } else {
