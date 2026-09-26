@@ -1,0 +1,231 @@
+/* ── Reset & base ──────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #f0f2f5;
+  color: #1a2030;
+  line-height: 1.5;
+}
+
+input, button, textarea, select { font-family: inherit; }
+a { color: #2563eb; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Focus-visible ring (keyboard nav only) ────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* ── Sidebar folder button hover ───────────────────────────────────────────── */
+.sidebar-item {
+  transition: background 0.15s ease, color 0.12s ease;
+}
+.sidebar-item:hover:not(.sidebar-item--active) {
+  background: var(--surface-hover, #eef2f9) !important;
+}
+.sidebar-item:active {
+  background: var(--surface-hover, #d8e4f5) !important;
+  transform: scale(0.98);
+}
+.sidebar-item--active {
+  background: var(--accent-light, #dbeafe) !important;
+  color: var(--accent, #2563eb) !important;
+}
+
+/* ── Thread list row hover ──────────────────────────────────────────────────── */
+.thread-row {
+  position: relative;
+  transform-origin: center;
+  transition: transform 0.28s ease, box-shadow 0.28s ease, background 0.13s ease;
+  cursor: pointer;
+}
+.thread-row:hover:not(.thread-row--selected) {
+  background: var(--surface-hover, #eef2f9) !important;
+  transform: scale(1.015);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  z-index: 1;
+}
+.thread-row--selected {
+  background: var(--surface-hover, #dbeafe) !important;
+}
+
+/* ── Filter chip hover ──────────────────────────────────────────────────────── */
+.filter-chip {
+  transition: background 0.13s ease, border-color 0.13s ease, color 0.13s ease;
+}
+.filter-chip:hover:not(.filter-chip--active) {
+  background: var(--surface-hover, #eef2f9) !important;
+  border-color: var(--border-strong, #c7d2e0) !important;
+}
+
+/* ── Tappable icon button ───────────────────────────────────────────────────── */
+.icon-btn {
+  transition: background 0.13s ease, color 0.13s ease;
+  border-radius: 6px;
+}
+.icon-btn:hover {
+  background: var(--surface-hover, #eef2f9) !important;
+  color: var(--text-primary, #1a2030) !important;
+}
+
+/* ── Danger icon button (trash / delete hover with red glow) ────────────────── */
+.icon-btn-danger {
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.icon-btn-danger:hover {
+  background: color-mix(in srgb, var(--danger, #b91c1c) 16%, transparent) !important;
+  color: var(--danger, #b91c1c) !important;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--danger, #b91c1c) 25%, transparent);
+}
+
+/* ── FAB ────────────────────────────────────────────────────────────────────── */
+.fab-btn {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.fab-btn:hover {
+  transform: scale(1.06);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.3) !important;
+}
+.fab-btn:active {
+  transform: scale(0.94);
+}
+
+/* ── Primary action buttons ─────────────────────────────────────────────────── */
+.btn-primary {
+  transition: filter 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+.btn-primary:hover {
+  filter: brightness(0.92);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+.btn-primary:active {
+  transform: scale(0.97);
+}
+
+/* ── Sidebar overlay (mobile) ───────────────────────────────────────────────── */
+.sidebar-overlay {
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ── Voice / animation ──────────────────────────────────────────────────────── */
+@keyframes pulse-red {
+  0%   { transform: scale(1);    box-shadow: 0 0 0 0   rgba(217, 48, 37, 0.7); }
+  50%  { transform: scale(1.08); box-shadow: 0 0 0 8px rgba(217, 48, 37, 0); }
+  100% { transform: scale(1);    box-shadow: 0 0 0 0   rgba(217, 48, 37, 0); }
+}
+@keyframes pulse-blue {
+  0%   { transform: scale(1);    box-shadow: 0 0 0 0   rgba(37, 99, 235, 0.6); }
+  50%  { transform: scale(1.04); box-shadow: 0 0 0 6px rgba(37, 99, 235, 0); }
+  100% { transform: scale(1);    box-shadow: 0 0 0 0   rgba(37, 99, 235, 0); }
+}
+@keyframes wave-bar {
+  0%, 100% { height: 6px; }
+  50%       { height: 20px; }
+}
+
+.listening-pulse { animation: pulse-red  1.5s infinite; }
+.speaking-pulse  { animation: pulse-blue 1.5s infinite; }
+
+.wave-bar-1 { animation: wave-bar 0.8s ease-in-out infinite; animation-delay: 0.0s; }
+.wave-bar-2 { animation: wave-bar 0.8s ease-in-out infinite; animation-delay: 0.2s; }
+.wave-bar-3 { animation: wave-bar 0.8s ease-in-out infinite; animation-delay: 0.4s; }
+.wave-bar-4 { animation: wave-bar 0.8s ease-in-out infinite; animation-delay: 0.1s; }
+.wave-bar-5 { animation: wave-bar 0.8s ease-in-out infinite; animation-delay: 0.3s; }
+
+/* ── Slim Auto-Hiding Scrollbar (Claude-style) ────────────────────────────── */
+.chat-scroll-container {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.3s ease;
+}
+
+.chat-scroll-container::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.chat-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-scroll-container::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+  transition: background 0.3s ease;
+}
+
+/* Hover or actively scrolling: reveal translucent thumb */
+.chat-scroll-container:hover,
+.chat-scroll-container.is-scrolling {
+  scrollbar-color: color-mix(in srgb, var(--border-strong, #8a9ab8) 55%, transparent) transparent;
+}
+
+.chat-scroll-container:hover::-webkit-scrollbar-thumb,
+.chat-scroll-container.is-scrolling::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--border-strong, #8a9ab8) 55%, transparent);
+}
+
+.chat-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--border-strong, #8a9ab8) 85%, transparent);
+}
+
+/* ── Formal View Overlay Animations ───────────────────────────────────────── */
+@keyframes formalOverlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes formalOverlayFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes formalCardZoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.93) translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes formalCardZoomOut {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+}
+
+.formal-overlay-backdrop {
+  animation: formalOverlayFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.formal-overlay-backdrop.closing {
+  animation: formalOverlayFadeOut 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.formal-overlay-card {
+  animation: formalCardZoomIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.formal-overlay-card.closing {
+  animation: formalCardZoomOut 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+

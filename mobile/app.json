@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "PhoneMail",
+    "slug": "phonemail",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#075E54"
+    },
+    "android": {
+      "package": "com.phonemail.app",
+      "permissions": [
+        "READ_PHONE_NUMBERS",
+        "READ_PHONE_STATE",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.phonemail.app",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Allow PhoneMail to use Face ID to quickly unlock your inbox."
+      }
+    },
+    "plugins": [
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow PhoneMail to use Face ID to quickly unlock your inbox."
+        }
+      ]
+    ]
+  }
+}

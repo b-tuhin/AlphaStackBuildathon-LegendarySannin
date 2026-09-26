@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PhoneMail — Terms of Service &amp; Privacy Policy</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+      line-height: 1.7;
+      color: #202124;
+      background: #fff;
+    }
+    h1 { font-size: 1.75rem; color: #1a73e8; margin-bottom: 4px; }
+    h2 { font-size: 1.1rem; margin-top: 2rem; color: #202124; }
+    p, li { color: #3c4043; }
+    ul { padding-left: 1.4em; }
+    .updated { font-size: 0.85rem; color: #5f6368; margin-bottom: 2rem; }
+    a { color: #1a73e8; }
+    hr { border: none; border-top: 1px solid #e8eaed; margin: 2.5rem 0; }
+    .notice {
+      background: #fef7e0; border-left: 4px solid #f9ab00;
+      padding: 12px 16px; border-radius: 4px; margin: 1.5rem 0;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Terms of Service &amp; Privacy Policy</h1>
+<p class="updated">Last updated: September 2026</p>
+
+<div class="notice">
+  <strong>Buildathon demo notice:</strong> PhoneMail is a hackathon project.
+  Before any real-world production use you should replace this document with
+  terms drafted by a qualified legal professional.
+</div>
+
+<h2>1. What PhoneMail is</h2>
+<p>PhoneMail is an email service that maps your phone number to an email address
+(<code>yournumber@phonemail.com</code>). You can send and receive email using
+that address from the web portal, mobile app, or any standard SMTP client.</p>
+
+<h2>2. Your account</h2>
+<ul>
+  <li>You must provide a valid phone number to create an account. Your phone number
+      becomes your email address and is the primary identifier for your account.</li>
+  <li>You are responsible for keeping your password confidential and for all activity
+      that occurs under your account.</li>
+  <li>You must be at least 13 years old to use PhoneMail.</li>
+  <li>You may not create accounts on behalf of others without their explicit consent.</li>
+</ul>
+
+<h2>3. Acceptable use</h2>
+<p>You agree <strong>not</strong> to use PhoneMail to:</p>
+<ul>
+  <li>Send spam, bulk unsolicited messages, or content that violates anti-spam laws.</li>
+  <li>Transmit malware, phishing content, or any malicious code.</li>
+  <li>Harass, threaten, or impersonate any person.</li>
+  <li>Violate any applicable local, national, or international law or regulation.</li>
+  <li>Attempt to circumvent the service's security, rate limits, or authentication systems.</li>
+</ul>
+
+<h2>4. SMS notifications</h2>
+<p>When someone sends email to your PhoneMail address and you do not have the mobile
+app installed (or a push token registered), PhoneMail may send you an SMS notification
+summarising the message. By creating an account you consent to receiving these
+transactional SMS messages. Standard carrier messaging rates may apply.</p>
+
+<h2>5. Data we collect</h2>
+<ul>
+  <li><strong>Phone number</strong> — used as your account identity and email address.</li>
+  <li><strong>Password</strong> — stored as a bcrypt hash; we cannot recover it in plaintext.</li>
+  <li><strong>Email content</strong> — messages you send and receive are stored to power your inbox.</li>
+  <li><strong>Device tokens</strong> — if you grant push-notification permission, your device
+      token is stored to deliver notifications without SMS.</li>
+  <li><strong>Login metadata</strong> — timestamps and failed-attempt counters used for rate
+      limiting and security; not shared externally.</li>
+</ul>
+
+<h2>6. Data we do <em>not</em> collect</h2>
+<ul>
+  <li>We do not track your location.</li>
+  <li>We do not sell your data to third parties.</li>
+  <li>We do not serve advertising.</li>
+</ul>
+
+<h2>7. Data retention</h2>
+<p>Your data is retained for as long as your account is active. You may request
+deletion of your account and associated data by contacting support. Upon deletion,
+email content and personal data are removed within 30 days; anonymised aggregate
+statistics may be retained indefinitely.</p>
+
+<h2>8. Third-party services</h2>
+<p>PhoneMail may use Twilio to deliver SMS notifications. When you receive an SMS,
+your phone number is shared with Twilio solely for the purpose of message delivery.
+Twilio's privacy policy is available at <a href="https://www.twilio.com/en-us/legal/privacy" target="_blank" rel="noreferrer">twilio.com/legal/privacy</a>.</p>
+
+<h2>9. Security</h2>
+<p>We take reasonable technical measures to protect your data, including bcrypt
+password hashing, short-lived JWT tokens, and rate limiting on authentication
+endpoints. However, no system is perfectly secure. You are encouraged to use a
+strong, unique password.</p>
+
+<h2>10. Changes to these terms</h2>
+<p>We may update these terms from time to time. Continued use of PhoneMail after
+a change constitutes acceptance of the updated terms. We will attempt to notify
+registered users of material changes via in-app notice.</p>
+
+<h2>11. Limitation of liability</h2>
+<p>PhoneMail is provided "as is" without warranties of any kind. To the maximum
+extent permitted by applicable law, the PhoneMail team shall not be liable for
+any indirect, incidental, or consequential damages arising from your use of the
+service.</p>
+
+<h2>12. Contact</h2>
+<p>Questions? Open an issue on the project repository or email the maintainer
+listed in the source code.</p>
+
+<hr />
+<p style="font-size:0.8rem; color:#80868b; text-align:center;">
+  © 2026 PhoneMail — Buildathon Project. All rights reserved.
+</p>
+
+</body>
+</html>

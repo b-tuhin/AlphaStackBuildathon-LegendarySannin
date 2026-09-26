@@ -1,0 +1,181 @@
+/**
+ * PhoneMail Mobile i18n string dictionaries.
+ * Mirrors the web dictionary and includes mobile-specific strings.
+ */
+
+export const SUPPORTED_LANGUAGES = [
+  { code: "en", label: "English" },
+  { code: "hi", label: "हिन्दी" },
+  { code: "ta", label: "தமிழ்" },
+  { code: "te", label: "తెలుగు" },
+  { code: "bn", label: "বাংলা" },
+  { code: "mr", label: "मराठी" },
+  { code: "pa", label: "ਪੰਜਾਬੀ" },
+  { code: "gu", label: "ગુજરાતી" },
+];
+
+const en = {
+  // App name & brand
+  appName: "PhoneMail",
+
+  // Onboarding Language Screen
+  chooseLanguage: "Choose your language",
+  changeLanguageLater: "You can change this later in Settings",
+  continue: "Continue",
+
+  // Navigation & Folders
+  folders: "Folders",
+  folderHome: "Inbox & Sent",
+  folderImportant: "Important",
+  folderDrafts: "Drafts",
+  folderSpam: "Spam",
+  folderTrash: "Trash",
+
+  // Search & Filter
+  searchPlaceholder: "Search name, number or subject",
+  filterAll: "All",
+  filterUnread: "Unread",
+  filterAttachments: "Attachments",
+  filterImportant: "Important",
+
+  // Inbox & List
+  newConversation: "New conversation",
+  noConversations: "No conversations yet. Tap + to compose.",
+  noFavorites: "No conversations with an important message.",
+  noMessages: (folder) => `No messages in ${folder}.`,
+  groupPrefix: "Group",
+  groupConversation: "Group Conversation",
+  groupParticipants: (n) => `Group · ${n} participants`,
+
+  // Chat Screen
+  replyingTo: "Replying to",
+  subjectOptional: "Subject (optional)",
+  typeMessage: "Message…",
+  typeReply: "Type reply…",
+  listeningIn: (lang) => `Listening in ${lang}… Speak now`,
+  done: "Done",
+  messageSent: (s) => `Message sent (${s}s)`,
+  undo: "UNDO",
+  waitingOffline: "Waiting to send",
+  helpMeWriteThis: "Help me write this",
+  helpMeRefineThis: "Help me refine this",
+  drafting: "Drafting…",
+  aiAssistedDraft: "AI-assisted draft — please review before sending",
+  refinePrefix: "Refine",
+
+  // Email Details Modal & Letter View
+  emailDetails: "Email Details",
+  readFullEmail: "Open as Letter",
+  fromLabel: "From",
+  toLabel: "To",
+  attachmentsCount: (n) => `Attachments (${n})`,
+  replyInChat: "Conversation Reply",
+  conversationReply: "Conversation Reply",
+  traditionalReply: "Formal Reply",
+  formalReply: "Formal Reply",
+  composeFormalLetter: "Compose formal letter",
+  openAsLetter: "Open as Letter",
+  alreadyReplied: "This message has already been replied to",
+
+  // Profile & Settings
+  profileSettings: "Profile & Settings",
+  displayName: "Display name",
+  yourName: "Your name",
+  save: "Save",
+  saved: "Saved",
+  aliasIds: "Alias IDs",
+  newAlias: "new-alias",
+  add: "Add",
+  language: "Language",
+  appLanguage: "App Language",
+  appearance: "Appearance",
+  darkMode: "Dark Mode",
+  darkThemeActive: "Dark theme active",
+  lightThemeActive: "Light theme active",
+  logOut: "Log Out",
+  logOutConfirm: "Are you sure you want to log out?",
+  cancel: "Cancel",
+};
+
+const hi = {
+  appName: "फ़ोनमेल",
+  chooseLanguage: "अपनी भाषा चुनें",
+  changeLanguageLater: "आप इसे बाद में सेटिंग्स में बदल सकते हैं",
+  continue: "जारी रखें",
+  folders: "फ़ोल्डर",
+  folderHome: "इनबॉक्स और भेजे गए",
+  folderImportant: "महत्वपूर्ण",
+  folderDrafts: "ड्राफ़्ट",
+  folderSpam: "स्पैम",
+  folderTrash: "ट्रैश",
+  searchPlaceholder: "नाम, नंबर या विषय खोजें",
+  filterAll: "सभी",
+  filterUnread: "अपठित",
+  filterAttachments: "अनुलग्नक",
+  filterImportant: "महत्वपूर्ण",
+  newConversation: "नई बातचीत",
+  noConversations: "अभी कोई बातचीत नहीं। नया संदेश लिखने के लिए + दबाएं।",
+  noFavorites: "महत्वपूर्ण संदेश वाली कोई बातचीत नहीं।",
+  noMessages: (folder) => `${folder} में कोई संदेश नहीं।`,
+  groupPrefix: "समूह",
+  groupConversation: "समूह वार्तालाप",
+  groupParticipants: (n) => `समूह · ${n} प्रतिभागी`,
+  replyingTo: "उत्तर दे रहे हैं",
+  subjectOptional: "विषय (वैकल्पिक)",
+  typeMessage: "संदेश लिखें…",
+  typeReply: "उत्तर लिखें…",
+  listeningIn: (lang) => `${lang} में सुन रहे हैं… बोलिए`,
+  done: "हो गया",
+  messageSent: (s) => `संदेश भेजा गया (${s}s)`,
+  undo: "पूर्ववत करें",
+  waitingOffline: "भेजे जाने की प्रतीक्षा में",
+  helpMeWriteThis: "लिखने में मदद करें",
+  helpMeRefineThis: "इसे सुधारने में मदद करें",
+  drafting: "ड्राफ़्ट बन रहा है…",
+  aiAssistedDraft: "AI-सहायक ड्राफ़्ट — भेजने से पहले समीक्षा करें",
+  refinePrefix: "सुधारें",
+  emailDetails: "ईमेल विवरण",
+  readFullEmail: "पत्र के रूप में खोलें",
+  fromLabel: "प्रेषक",
+  toLabel: "प्राप्तकर्ता",
+  attachmentsCount: (n) => `अनुलग्नक (${n})`,
+  replyInChat: "बातचीत में जवाब दें",
+  conversationReply: "बातचीत में जवाब दें",
+  traditionalReply: "औपचारिक जवाब",
+  formalReply: "औपचारिक जवाब",
+  composeFormalLetter: "औपचारिक पत्र लिखें",
+  openAsLetter: "पत्र के रूप में खोलें",
+  alreadyReplied: "इस संदेश का जवाब पहले ही दिया जा चुका है",
+  profileSettings: "प्रोफ़ाइल और सेटिंग्स",
+  displayName: "प्रदर्शन नाम",
+  yourName: "आपका नाम",
+  save: "सहेजें",
+  saved: "सहेजा गया",
+  aliasIds: "उपनाम IDs",
+  newAlias: "नया-उपनाम",
+  add: "जोड़ें",
+  language: "भाषा",
+  appLanguage: "ऐप की भाषा",
+  appearance: "उपस्थिति",
+  darkMode: "डार्क मोड",
+  darkThemeActive: "डार्क थीम सक्रिय",
+  lightThemeActive: "लाइट थीम सक्रिय",
+  logOut: "लॉग आउट",
+  logOutConfirm: "क्या आप निश्चित रूप से लॉग आउट करना चाहते हैं?",
+  cancel: "रद्द करें",
+};
+
+const partial = (overrides) => ({ ...en, ...overrides });
+
+export const STRINGS = {
+  en,
+  hi,
+  ta: partial({ appName: "போன்மெயில்", folderHome: "இன்பாக்ஸ் & அனுப்பியவை", language: "மொழி", continue: "தொடரவும்" }),
+  te: partial({ appName: "ఫోన్‌మెయిల్", folderHome: "ఇన్‌బాక్స్ & పంపినవి", language: "భాష", continue: "కొనసాగించండి" }),
+  bn: partial({ appName: "ফোনমেইল", folderHome: "ইনবক্স ও প্রেরিত", language: "ভাষা", continue: "চালিয়ে যান" }),
+  mr: partial({ appName: "फोनमेल", folderHome: "इनबॉक्स आणि पाठवलेले", language: "भाषा", continue: "पुढे चालू ठेवा" }),
+  pa: partial({ appName: "ਫ਼ੋਨਮੇਲ", folderHome: "ਇਨਬਾਕਸ ਅਤੇ ਭੇਜੇ ਗਏ", language: "ਭਾਸ਼ਾ", continue: "ਜਾਰੀ ਰੱਖੋ" }),
+  gu: partial({ appName: "ફોનમેઇલ", folderHome: "ઇનબૉક્સ & મોકલ્યા", language: "ભાષા", continue: "ચાલુ રાખો" }),
+};
+
+export default STRINGS;
