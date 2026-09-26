@@ -27,6 +27,7 @@ import {
   Search,
   ChevronUp,
   ChevronDown,
+  Globe,
 } from "lucide-react";
 import {
   getThreadMessages,
