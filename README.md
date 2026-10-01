@@ -1,4 +1,32 @@
-# PhoneMail
+# Bharat Chat
+
+**Your phone number is your email address.** Bharat Chat is a mobile-first, WhatsApp-style chat inbox on top of real email, with a Gmail-style web portal and a Node.js backend (REST + SMTP). Everything runs in Docker.
+
+## Highlights
+
+- **Two interfaces:** Gmail-like web portal, WhatsApp-like mobile layout.
+- **8 languages:** English, Hindi, Tamil, Telugu, Bengali, Marathi, Punjabi, Gujarati.
+- **Chat view over email:** conversations, replies, stars, drafts, spam, trash, permanent delete, message details, read aloud.
+- **Polished UX:** light and dark themes, doodle chat wallpaper, branded splash screen with loading bar, accessible controls.
+- **Simple sign-in:** language, terms, phone number, password. No SMS or OTP service is needed to run the project.
+
+## Run it in 3 steps
+
+Requirements: Docker Desktop (running) and an internet connection for the first build. No `.env` file is needed; the compose file has working defaults.
+
+1. Unzip the project and open a terminal in the folder that contains `docker-compose.yml`.
+2. Run: `docker compose up -d --build backend web`
+3. Open **http://localhost:3000** and register an account.
+
+To try chatting, register a second account (a different phone number, in a private window) and send a message between the two. No demo data is included.
+
+Notes:
+- Open the site on the same machine that runs Docker (the web build calls the API at `http://localhost:4000`).
+- Backend health check: http://localhost:4000/health
+- The optional mobile (Expo) container is not needed for the website; `docker compose up -d --build` starts it too and takes longer.
+- Sign-in uses `OTP_MODE=password`: phone ownership is not verified in this mode.
+
+## About the platform
 
 An email platform where your **phone number is your email address**
 (`9876543210@phonemail.com`). Mobile-first, WhatsApp-styled chat inbox, with a
