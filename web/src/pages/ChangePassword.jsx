@@ -6,6 +6,7 @@ import { styles } from "./Register.jsx";
 import { APP_NAME } from "../config/brand.js";
 import Logo from "../components/Logo.jsx";
 import { useIsMobile } from "../utils/useIsMobile.js";
+import { useI18n } from "../i18n/I18nContext.jsx";
 
 export default function ChangePassword({ onDone }) {
   const [password, setPw] = useState("");
@@ -13,12 +14,13 @@ export default function ChangePassword({ onDone }) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const isNarrow = useIsMobile(1023);
+  const { t } = useI18n();
 
   const submit = async (e) => {
     e.preventDefault();
     setError("");
-    if (password.length < 8) return setError("Password must be at least 8 characters.");
-    if (password !== confirmPassword) return setError("Passwords do not match.");
+    if (password.length < 8) return setError(t("fpErrLen"));
+    if (password !== confirmPassword) return setError(t("fpErrMatch"));
     setLoading(true);
     try {
       await setPassword(password, confirmPassword);
@@ -37,15 +39,15 @@ export default function ChangePassword({ onDone }) {
           <Logo size={40} />
           <h1 style={{ ...styles.logo, margin: 0 }}>{APP_NAME}</h1>
         </div>
-        <p style={styles.tagline}>Choose a new password before you continue. Temporary passwords from SMS or phone signup must be changed.</p>
+        <p style={styles.tagline}>{t("cpgTagline")}</p>
         <form onSubmit={submit}>
-          <label style={styles.label}>New password</label>
+          <label style={styles.label}>{t("fpNewPw")}</label>
           <PasswordField value={password} onChange={setPw} autoComplete="new-password" />
           <StrengthMeter password={password} />
-          <label style={styles.label}>Confirm password</label>
-          <PasswordField value={confirmPassword} onChange={setConfirm} placeholder="Confirm password" autoComplete="new-password" />
+          <label style={styles.label}>{t("fpConfirmPw")}</label>
+          <PasswordField value={confirmPassword} onChange={setConfirm} placeholder={t("fpConfirmPw")} autoComplete="new-password" />
           {error && <p style={styles.error}>{error}</p>}
-          <button style={styles.button} disabled={loading}>{loading ? "Saving…" : "Save password"}</button>
+          <button style={styles.button} disabled={loading}>{loading ? t("fpSaving") : t("cpgSave")}</button>
         </form>
       </div>
     </div>

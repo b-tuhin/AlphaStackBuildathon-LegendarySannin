@@ -7,6 +7,7 @@ import { styles } from "./Register.jsx";
 import { APP_NAME } from "../config/brand.js";
 import Logo from "../components/Logo.jsx";
 import { useIsMobile } from "../utils/useIsMobile.js";
+import { useI18n } from "../i18n/I18nContext.jsx";
 
 /**
  * useWebOTP — listens for a one-time password from the browser's
@@ -46,6 +47,7 @@ export default function ForgotPassword() {
   const [loading, setLoading]         = useState(false);
   const navigate = useNavigate();
   const isNarrow = useIsMobile(1023);
+  const { t } = useI18n();
 
   // Activate WebOTP only on the confirm step, not on request
   useWebOTP((autofilled) => setCode(autofilled), step === "confirm");
@@ -54,14 +56,14 @@ export default function ForgotPassword() {
     e.preventDefault();
     setError("");
     const digits = phone.replace(/[^\d]/g, "");
-    if (digits.length < 7) return setError("Enter a valid phone number.");
+    if (digits.length < 7) return setError(t("fpErrPhone"));
     setLoading(true);
     try {
       const { data } = await requestPasswordReset(digits);
       setResetHint(
         data.resetCode
           ? `Dev mode — code: ${data.resetCode}`
-          : "If that number has an account, we sent a reset code by SMS."
+          : t("fpHint")
       );
       setStep("confirm");
     } catch (err) {
@@ -74,8 +76,8 @@ export default function ForgotPassword() {
   const confirm = async (e) => {
     e.preventDefault();
     setError("");
-    if (password.length < 8) return setError("Password must be at least 8 characters.");
-    if (password !== confirmPassword) return setError("Passwords do not match.");
+    if (password.length < 8) return setError(t("fpErrLen"));
+    if (password !== confirmPassword) return setError(t("fpErrMatch"));
     setLoading(true);
     try {
       const digits = phone.replace(/[^\d]/g, "");
@@ -95,11 +97,11 @@ export default function ForgotPassword() {
           <Logo size={40} />
           <h1 style={{ ...styles.logo, margin: 0 }}>{APP_NAME}</h1>
         </div>
-        <p style={styles.tagline}>Reset your password with a code sent by SMS.</p>
+        <p style={styles.tagline}>{t("fpTagline")}</p>
 
         {step === "request" ? (
           <form onSubmit={requestCode}>
-            <label style={styles.label}>Phone number</label>
+            <label style={styles.label}>{t("fpPhone")}</label>
             <input
               style={styles.input}
               placeholder="9876543210"
@@ -111,12 +113,12 @@ export default function ForgotPassword() {
             />
             {error && <p style={styles.error} role="alert">{error}</p>}
             <button style={styles.button} disabled={loading}>
-              {loading ? "Sending…" : "Send reset code"}
+              {loading ? t("fpSending") : t("fpSend")}
             </button>
           </form>
         ) : (
           <form onSubmit={confirm}>
-            <label style={styles.label}>Reset code</label>
+            <label style={styles.label}>{t("fpCode")}</label>
             {/*
               autocomplete="one-time-code" tells password managers and
               browsers to offer the SMS OTP.  WebOTP fills it automatically
@@ -124,7 +126,7 @@ export default function ForgotPassword() {
             */}
             <input
               style={styles.input}
-              placeholder="6-digit code"
+              placeholder={t("fpCodePh")}
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
               autoComplete="one-time-code"
@@ -134,24 +136,24 @@ export default function ForgotPassword() {
               autoFocus
             />
             {resetHint && <p style={styles.hint}>{resetHint}</p>}
-            <label style={styles.label}>New password</label>
+            <label style={styles.label}>{t("fpNewPw")}</label>
             <PasswordField value={password} onChange={setPassword} autoComplete="new-password" />
             <StrengthMeter password={password} />
-            <label style={styles.label}>Confirm password</label>
+            <label style={styles.label}>{t("fpConfirmPw")}</label>
             <PasswordField
               value={confirmPassword}
               onChange={setConfirmPassword}
-              placeholder="Confirm password"
+              placeholder={t("fpConfirmPw")}
               autoComplete="new-password"
             />
             {error && <p style={styles.error} role="alert">{error}</p>}
             <button style={styles.button} disabled={loading}>
-              {loading ? "Saving…" : "Set new password"}
+              {loading ? t("fpSaving") : t("fpSet")}
             </button>
           </form>
         )}
         <p style={styles.switch}>
-          <Link to="/login">Back to log in</Link>
+          <Link to="/login">{t("fpBack")}</Link>
         </p>
       </div>
     </div>

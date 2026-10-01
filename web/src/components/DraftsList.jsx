@@ -1,5 +1,5 @@
-import React from "react";
-import { FileText, Trash2 } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { FileText, Trash2, X, Check } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext.jsx";
 import { useI18n } from "../i18n/I18nContext.jsx";
 
@@ -14,9 +14,23 @@ function formatWhen(iso) {
 }
 
 /** Drafts folder: unsent messages saved when a compose window is closed. */
-export default function DraftsList({ drafts, onOpen, onDelete }) {
+export default function DraftsList({ drafts, onOpen, onDelete, onSelBar }) {
   const { colors } = useTheme();
   const { t } = useI18n();
+  const [selIds, setSelIds] = useState(() => new Set());
+  const selMode = selIds.size > 0;
+  const lpTimer = useRef(null);
+  const lpDone = useRef(false);
+  const startLP = (id) => { lpDone.current = false; clearTimeout(lpTimer.current); lpTimer.current = setTimeout(() => { lpDone.current = true; setSelIds(new Set([id])); }, 450); };
+  const cancelLP = () => clearTimeout(lpTimer.current);
+  const toggleSel = (id) => setSelIds((prev) => { const nx = new Set(prev); if (nx.has(id)) nx.delete(id); else nx.add(id); return nx; });
+  const deleteSelected = () => { drafts.filter((x) => selIds.has(x.id)).forEach((x) => onDelete(x)); setSelIds(new Set()); };
+  useEffect(() => {
+    if (!onSelBar) return;
+    if (selMode) onSelBar({ count: selIds.size, onCancel: () => setSelIds(new Set()), onAction: deleteSelected, label: t("selDeleteBtn"), icon: <Trash2 size={15} strokeWidth={2} /> });
+    else onSelBar(null);
+  }, [selIds]);
+  useEffect(() => () => { if (onSelBar) onSelBar(null); }, []);
 
   if (!drafts.length) {
     return (
@@ -27,25 +41,27 @@ export default function DraftsList({ drafts, onOpen, onDelete }) {
   }
 
   return (
-    <div className="chat-scroll-container" style={{ flex: 1, overflowY: "auto" }}>
+    <>
+        <div className="chat-scroll-container" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", paddingTop: 4, paddingBottom: 8 }}>
       {drafts.map((d) => (
         <div
           key={d.id}
           role="button"
           tabIndex={0}
           className="thread-row"
-          onClick={() => onOpen(d)}
+          onClick={() => { if (lpDone.current) { lpDone.current = false; return; } if (selMode) toggleSel(d.id); else onOpen(d); }}
+          onMouseDown={() => startLP(d.id)} onMouseUp={cancelLP} onMouseLeave={cancelLP}
+          onTouchStart={() => startLP(d.id)} onTouchEnd={cancelLP} onTouchMove={cancelLP} onTouchCancel={cancelLP}
           onKeyDown={(e) => (e.key === "Enter" ? onOpen(d) : null)}
           style={{
             display: "flex",
             alignItems: "center",
             gap: 12,
-            padding: "12px 16px",
-            cursor: "pointer",
-            borderBottom: `1px solid ${colors.border}`,
-            background: colors.surface,
+            minHeight: 72, boxSizing: "border-box", padding: 12, margin: "0 8px", marginBottom: 4, borderRadius: "var(--r-md)", cursor: "pointer", position: "relative", background: selIds.has(d.id) ? "var(--primary-tint)" : "transparent", transform: selIds.has(d.id) ? "scale(1.02)" : "none", userSelect: "none",
           }}
         >
+          <span style={{ width: 18, height: 18, borderRadius: 4, flexShrink: 0, boxSizing: "border-box", display: selMode ? "flex" : "none", alignItems: "center", justifyContent: "center", border: selIds.has(d.id) ? "2px solid var(--primary)" : "2px solid var(--border-strong)", background: selIds.has(d.id) ? "var(--primary)" : "transparent", color: "var(--on-primary)" }}>{selIds.has(d.id) ? <Check size={12} strokeWidth={3} /> : null}</span>
+
           <div
             style={{
               width: 44,
@@ -115,5 +131,6 @@ export default function DraftsList({ drafts, onOpen, onDelete }) {
         </div>
       ))}
     </div>
+    </>
   );
 }

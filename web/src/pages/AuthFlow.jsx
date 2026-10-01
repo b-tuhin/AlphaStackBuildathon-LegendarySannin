@@ -1,7 +1,7 @@
 import { EMAIL_DOMAIN } from "../config/brand.js";
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { login, registerAccount, startPhoneOtp, checkPhoneOtp, setToken } from "../api/client.js";
+import { login, registerAccount, startPhoneOtp, checkPhoneOtp, checkPhoneExists, setToken } from "../api/client.js";
 import { useTheme } from "../theme/ThemeContext.jsx";
 import { useI18n } from "../i18n/I18nContext.jsx";
 import { APP_NAME } from "../config/brand.js";
@@ -13,7 +13,7 @@ import PasswordField from "../components/PasswordField.jsx";
 import StrengthMeter from "../components/StrengthMeter.jsx";
 import ChangePassword from "./ChangePassword.jsx";
 import ThemedCheckbox from "../components/ThemedCheckbox.jsx";
-import { AlertCircle, Check, Globe } from "lucide-react";
+import { AlertCircle, Check, Globe, Smartphone } from "lucide-react";
 
 const cleanPhone = (raw) => {
   let d = String(raw || "").replace(/\D/g, "");
@@ -28,7 +28,7 @@ export default function AuthFlow({ initialMode = "login" }) {
   const navigate = useNavigate();
 
   // Login goes directly to phone/password. Signup uses phone -> SMS code -> password.
-  const [step, setStep] = useState(3);
+  const [step, setStep] = useState(1);
   const [mode, setMode] = useState(initialMode); // "login" | "register"
 
   // Terms state
@@ -63,7 +63,12 @@ export default function AuthFlow({ initialMode = "login" }) {
       setError(t("phoneInvalid"));
       return;
     }
-    if (mode === "register") {
+    let exists = null;
+    setLoading(true);
+    try { const r = await checkPhoneExists(phone); exists = !!r.data.exists; } catch { exists = null; } finally { setLoading(false); }
+    if (exists === true) { setMode("login"); setSignupGrant(""); setOtpCode(""); setPhoneOtpRequired(true); setStep(4); return; }
+    if (exists === false) setMode("register");
+    if (exists === false || mode === "register") {
       setLoading(true);
       try {
         const { data } = await startPhoneOtp(phone, "signup");
@@ -174,7 +179,7 @@ export default function AuthFlow({ initialMode = "login" }) {
               <span className="auth-card-brand-name">{APP_NAME}</span>
             </div>
 
-            <AuthLanguageMenu />
+            
             <span
               style={{
                 fontSize: 12,
@@ -185,7 +190,7 @@ export default function AuthFlow({ initialMode = "login" }) {
                 letterSpacing: "0.3px",
               }}
             >
-              Step {step === 3 ? 1 : step === 4 ? 2 : 3} of {mode === "register" ? 3 : 2}
+              {t("afStepOf").replace("{n}", step).replace("{total}", mode === "register" ? 5 : 4)}
             </span>
           </div>
 
@@ -201,7 +206,7 @@ export default function AuthFlow({ initialMode = "login" }) {
           >
             <div
               style={{
-                width: `${(step === 3 ? 33 : step === 4 ? 66 : 100)}%`,
+                width: `${Math.round((step / (mode === "register" ? 5 : 4)) * 100)}%`,
                 height: "100%",
                 background: "var(--primary)", borderRadius: 2, transition: "width 240ms ease",
               }}
@@ -313,10 +318,10 @@ export default function AuthFlow({ initialMode = "login" }) {
               <div>
                 <div style={{ marginBottom: 16 }}>
                   <h2 style={{ margin: "0 0 6px 0", fontSize: 20, fontWeight: 700, color: colors.textPrimary }}>
-                    Terms &amp; Privacy Policy
+                    {t("afTermsTitle")}
                   </h2>
                   <p style={{ margin: 0, fontSize: 13, color: colors.textSecondary }}>
-                    Please review and accept our civic terms before continuing.
+                    {t("afTermsIntro")}
                   </p>
                 </div>
 
@@ -343,19 +348,19 @@ export default function AuthFlow({ initialMode = "login" }) {
                   </p>
 
                   <h4 style={{ margin: "0 0 4px 0", color: colors.textPrimary, fontSize: 13, fontWeight: 700 }}>
-                    Civic privacy commitment
+                    {t("afPrivacyHead")}
                   </h4>
                   <p style={{ margin: "0 0 12px 0" }}>
-                    We do not track your location, sell your data, or serve advertising. Your communications remain secure and private.
+                    {t("afPrivacyBody")}
                   </p>
 
                   <h4 style={{ margin: "0 0 4px 0", color: colors.textPrimary, fontSize: 13, fontWeight: 700 }}>
-                    Data we protect
+                    {t("afDataHead")}
                   </h4>
                   <ul style={{ margin: "0 0 12px 0", paddingLeft: 18 }}>
-                    <li>Mobile number (your identity &amp; email handle)</li>
-                    <li>Password (stored with military-grade encryption)</li>
-                    <li>Mail messages &amp; attachments (for inbox delivery only)</li>
+                    <li>{t("afData1")}</li>
+                    <li>{t("afData2")}</li>
+                    <li>{t("afData3")}</li>
                   </ul>
 
                   <a
@@ -364,7 +369,7 @@ export default function AuthFlow({ initialMode = "login" }) {
                     rel="noreferrer"
                     style={{ color: "var(--c-navy)", fontWeight: 600, textDecoration: "none" }}
                   >
-                    Read full Terms of Service &amp; Privacy Policy ↗
+                    {t("afReadFull")} ↗
                   </a>
                 </div>
 
@@ -391,7 +396,7 @@ export default function AuthFlow({ initialMode = "login" }) {
                   <span>
                     I agree to {APP_NAME}'s{" "}
                     <a href="/terms.html" target="_blank" rel="noreferrer" style={{ color: "var(--c-navy)", fontWeight: 600 }}>
-                      Terms of Service &amp; Privacy Policy
+                      {t("afTosLink")}
                     </a>
                   </span>
                 </label>
@@ -412,7 +417,7 @@ export default function AuthFlow({ initialMode = "login" }) {
                     fontWeight: 600,
                   }}
                 >
-                  Agree and continue
+                  {t("afAgree")}
                 </button>
 
                 <button
@@ -444,13 +449,13 @@ export default function AuthFlow({ initialMode = "login" }) {
                       margin: "0 auto 10px auto",
                     }}
                   >
-                    <span style={{ fontSize: 22 }}>📱</span>
+                    <Smartphone size={24} strokeWidth={1.75} color="var(--link)" />
                   </div>
                   <h2 style={{ margin: "0 0 6px 0", fontSize: 20, fontWeight: 700, color: colors.textPrimary }}>
-                    Enter your phone number
+                    {t("afPhoneTitle")}
                   </h2>
                   <p style={{ margin: 0, fontSize: 13, color: colors.textSecondary }}>
-                    This becomes your {APP_NAME} email address.
+                    {t("afPhoneDesc").replace("{app}", APP_NAME)}
                   </p>
                 </div>
 
@@ -460,7 +465,7 @@ export default function AuthFlow({ initialMode = "login" }) {
                     className="pm-label"
                     style={{ marginTop: 0 }}
                   >
-                    Mobile Phone Number
+                    {t("afPhoneLabel")}
                   </label>
                   <div className="login-input-wrap">
                     <span
@@ -505,7 +510,7 @@ export default function AuthFlow({ initialMode = "login" }) {
                       gap: 6,
                     }}
                   >
-                    <span>Your address will be:</span>
+                    <span>{t("afAddrWill")}</span>
                     <strong style={{ color: "var(--c-navy)", fontWeight: 700 }}>
                       {(phone.replace(/[^\d]/g, "").length === 10 ? `91${phone.replace(/[^\d]/g, "")}` : phone.replace(/[^\d]/g, "")) || "..."}@{EMAIL_DOMAIN}
                     </strong>
@@ -538,14 +543,14 @@ export default function AuthFlow({ initialMode = "login" }) {
                 )}
                 <TermsDialog open={termsOpen} onClose={() => setTermsOpen(false)} />
 
-                {mode === "register" && <button type="button" className="btn-secondary" style={{ width: "100%", marginTop: 10 }} onClick={() => { setMode("login"); setPhoneOtpRequired(true); setSignupGrant(""); setStep(3); }}>Already have an account? Sign in</button>}
+                {mode === "register" && <button type="button" className="btn-secondary" style={{ width: "100%", marginTop: 10 }} onClick={() => { setMode("login"); setPhoneOtpRequired(true); setSignupGrant(""); setStep(3); }}>{t("afHaveAccount")}</button>}
               </form>
             )}
 
             {/* Signup OTP entry; login skips this step. */}
             {step === 4 && mode === "register" && !signupGrant && (
               <form onSubmit={handleOtpSubmit}>
-                <h2 style={{ margin: "0 0 6px 0", fontSize: 20, fontWeight: 700, color: colors.textPrimary }}>Enter the verification code</h2>
+                <h2 style={{ margin: "0 0 6px 0", fontSize: 20, fontWeight: 700, color: colors.textPrimary }}>{t("afCodeTitle")}</h2>
                 <p>We sent a one-time code to {phone}. Your browser may offer to autofill it.</p>
                 <input name="otpCode" type="text" inputMode="numeric" autoComplete="one-time-code" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 10))} maxLength={10} autoFocus />
                 <button type="submit" disabled={loading} className="btn-primary" style={{ width: "100%", minHeight: 48, marginTop: 16 }}>{loading ? "Please wait..." : "Next"}</button>
@@ -573,72 +578,19 @@ export default function AuthFlow({ initialMode = "login" }) {
                       fontWeight: 600,
                     }}
                   >
-                    <span>Account:</span>
+                    <span>{t("afAccount")}</span>
                     <strong>{(phone.replace(/[^\d]/g, "").length === 10 ? `91${phone.replace(/[^\d]/g, "")}` : phone.replace(/[^\d]/g, ""))}@{EMAIL_DOMAIN}</strong>
                   </div>
                 </div>
 
                 {/* Mode Selector Tab (Sign In / Create Account) */}
-                <div
-                  style={{
-                    display: "flex",
-                    background: "var(--c-surface-alt)",
-                    borderRadius: "var(--r-md)",
-                    padding: 4,
-                    marginBottom: 20,
-                  }}
-                >
-                  <button
-                    type="button"
-                onClick={() => { setMode("login"); setError(""); setSignupGrant(""); setOtpCode(""); setPhoneOtpRequired(true); setPassword(""); setConfirmPassword(""); setStep(4); }}
-                    style={{
-                      flex: 1,
-                      minHeight: 40,
-                      padding: "8px 12px",
-                      borderRadius: "calc(var(--r-md) - 2px)",
-                      border: "none",
-                      background: mode === "login" ? "var(--c-surface)" : "transparent",
-                      color: mode === "login" ? "var(--c-navy)" : colors.textSecondary,
-                      fontWeight: mode === "login" ? 700 : 500,
-                      cursor: "pointer",
-                      fontSize: 13,
-                      fontFamily: "var(--font-sans)",
-                      boxShadow: mode === "login" ? "var(--shadow-sm)" : "none",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    Sign In
-                  </button>
-                  <button
-                    type="button"
-                onClick={() => { setMode("register"); setError(""); setSignupGrant(""); setOtpCode(""); setPhoneOtpRequired(true); setPassword(""); setConfirmPassword(""); setStep(3); }}
-                    style={{
-                      flex: 1,
-                      minHeight: 40,
-                      padding: "8px 12px",
-                      borderRadius: "calc(var(--r-md) - 2px)",
-                      border: "none",
-                      background: mode === "register" ? "var(--c-surface)" : "transparent",
-                      color: mode === "register" ? "var(--c-navy)" : colors.textSecondary,
-                      fontWeight: mode === "register" ? 700 : 500,
-                      cursor: "pointer",
-                      fontSize: 13,
-                      fontFamily: "var(--font-sans)",
-                      boxShadow: mode === "register" ? "var(--shadow-sm)" : "none",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    Create Account
-                  </button>
-                </div>
-
                 <div style={{ marginBottom: 16 }}>
                   <label
                     htmlFor="password"
                     className="pm-label"
                     style={{ marginTop: 0 }}
                   >
-                    Password
+                    {t("afPassword")}
                   </label>
                   <PasswordField
                     id="password"
@@ -658,14 +610,14 @@ export default function AuthFlow({ initialMode = "login" }) {
                       className="pm-label"
                       style={{ marginTop: 0 }}
                     >
-                      Confirm Password
+                      {t("afConfirmPw")}
                     </label>
                     <PasswordField
                       id="confirmPassword"
                       name="confirmPassword"
                       value={confirmPassword}
                       onChange={setConfirmPassword}
-                      placeholder="Confirm your password"
+                      placeholder={t("afConfirmPh")}
                       autoComplete="new-password"
                     />
                   </div>
@@ -682,7 +634,7 @@ export default function AuthFlow({ initialMode = "login" }) {
                         textDecoration: "none",
                       }}
                     >
-                      Forgot password?
+                      {t("afForgot")}
                     </Link>
                   </div>
                 )}
@@ -711,7 +663,7 @@ export default function AuthFlow({ initialMode = "login" }) {
                   style={{ width: "100%", marginTop: 10 }}
                   onClick={() => { setSignupGrant(""); setOtpCode(""); setPhoneOtpRequired(true); setStep(3); }}
                 >
-                  Change Phone Number
+                  {t("afChangePhone")}
                 </button>
               </form>
             )}

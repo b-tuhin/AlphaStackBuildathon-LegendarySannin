@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { parseServerDate } from "../utils/dateFix.js";
 import { updateEmail, downloadAttachment, BASE_URL } from "../api/client.js";
 import { useTheme } from "../theme/ThemeContext.jsx";
 import { Reply, Trash2, ShieldAlert, Star, Volume2, VolumeX, FileText, Download, Check, CheckCheck, ArrowRight } from "lucide-react";
@@ -193,7 +194,7 @@ export default function EmailView({ email, refreshList, onReply }) {
               )}
             </span>
           )}
-          <span style={{ color: colors.textSecondary }}>{new Date(email.created_at).toLocaleString()}</span>
+          <span style={{ color: colors.textSecondary }}>{parseServerDate(email.created_at).toLocaleString()}</span>
         </div>
       </div>
 

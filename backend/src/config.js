@@ -42,8 +42,8 @@ const jwtSecret = rawSecret || "phonemail_dev_secret";
 export const config = {
   port: parseInt(process.env.PORT || "4000", 10),
   smtpPort: parseInt(process.env.SMTP_PORT || "2525", 10),
-  mailDomain: process.env.MAIL_DOMAIN || "phonemail.com",
-  webDomain: process.env.WEB_DOMAIN || process.env.MAIL_DOMAIN || "phonemail.com",
+  mailDomain: process.env.MAIL_DOMAIN || "bharatchat.com",
+  webDomain: process.env.WEB_DOMAIN || process.env.MAIL_DOMAIN || "bharatchat.com",
   androidSmsHash: process.env.ANDROID_SMS_HASH || "FA+9qCX9VSu",
   jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",

@@ -23,6 +23,7 @@ addColumn("threads", "group_avatar_id", "TEXT");
 addColumn("emails", "edited_at", "TEXT");
 addColumn("thread_state", "pinned", "INTEGER NOT NULL DEFAULT 0");
 addColumn("thread_state", "deleted_at", "TEXT");
+addColumn("thread_state", "cleared_at", "TEXT");
 
 // Upgrade prior national/digits-only records to canonical E.164 without changing mail handles.
 try {

@@ -336,9 +336,7 @@ router.get("/threads/:id/messages", (req, res) => {
   db.prepare(`UPDATE emails SET is_read = 1 WHERE thread_id = ? AND recipient_list_has(to_address, ?) = 1`)
     .run(req.params.id, addr);
 
-  const messages = db.prepare(
-    `SELECT * FROM emails WHERE thread_id = ? ORDER BY created_at ASC`
-  ).all(req.params.id);
+  const messages = db.prepare(`SELECT * FROM emails WHERE thread_id = ? AND (? IS NULL OR julianday(created_at) > julianday(?)) ORDER BY created_at ASC`).all(req.params.id, state?.cleared_at ?? null, state?.cleared_at ?? null);
 
   const enriched = messages.map((m) => enrichMessage(m, addr));
   res.json(enriched);
@@ -770,11 +768,12 @@ router.delete("/threads/:id", (req, res) => {
   if (isPurge) {
     // Permanent purge for this user
     db.prepare(`
-      INSERT INTO thread_state (thread_id, user_address, folder, deleted_at)
-      VALUES (?, ?, 'trash', datetime('now'))
+      INSERT INTO thread_state (thread_id, user_address, folder, deleted_at, cleared_at)
+      VALUES (?, ?, 'trash', datetime('now'), datetime('now'))
       ON CONFLICT(thread_id, user_address) DO UPDATE SET
         folder = 'trash',
-        deleted_at = datetime('now')
+        deleted_at = datetime('now'),
+        cleared_at = datetime('now')
     `).run(req.params.id, addr);
 
     // Determine all participants of this thread

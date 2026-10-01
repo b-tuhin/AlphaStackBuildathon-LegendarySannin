@@ -82,6 +82,7 @@ export const saveDraft = (id, payload) => client.put(`/mail/drafts/${id}`, paylo
 export const deleteDraft = (id) => client.delete(`/mail/drafts/${id}`);
 
 export const startPhoneOtp = (phone, purpose) => client.post("/auth/phone/start", { phone, purpose });
+export const checkPhoneExists = (phone) => client.post("/auth/phone/exists", { phone });
 export const checkPhoneOtp = (phone, code, purpose) => client.post("/auth/phone/check", { phone, code, purpose });
 export const changePassword = (currentPassword, password, confirmPassword) =>
   client.post("/auth/password/change", { currentPassword, password, confirmPassword });

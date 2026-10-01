@@ -3,12 +3,13 @@ import { useTheme } from "../theme/ThemeContext.jsx";
 import { useI18n } from "../i18n/I18nContext.jsx";
 import { getImportantMessages, updateEmail } from "../api/client.js";
 import { getAvatarInitials, getAvatarColor, formatPhoneNumber } from "../utils/contact.js";
-import { Star, Users } from "lucide-react";
+import { Star, Users, X, Check } from "lucide-react";
 import Avatar from "./Avatar.jsx";
+import { parseServerDate } from "../utils/dateFix.js";
 
 function formatRelativeDate(isoStr) {
   if (!isoStr) return "";
-  const d = new Date(isoStr);
+  const d = parseServerDate(isoStr);
   const now = new Date();
   const diffDays = Math.floor((now - d) / (1000 * 60 * 60 * 24));
 
@@ -21,14 +22,33 @@ function formatRelativeDate(isoStr) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-export default function ImportantList({ onSelect }) {
+export default function ImportantList({ onSelect, onSelBar }) {
   const { colors } = useTheme();
   const { t } = useI18n();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selIds, setSelIds] = useState(() => new Set());
+  const selMode = selIds.size > 0;
+  const lpTimer = React.useRef(null);
+  const lpDone = React.useRef(false);
+  const startLP = (id) => { lpDone.current = false; clearTimeout(lpTimer.current); lpTimer.current = setTimeout(() => { lpDone.current = true; setSelIds(new Set([id])); }, 450); };
+  const cancelLP = () => clearTimeout(lpTimer.current);
+  const toggleSel = (id) => setSelIds((prev) => { const nx = new Set(prev); if (nx.has(id)) nx.delete(id); else nx.add(id); return nx; });
+  const unstarSelected = async () => {
+    const ids = Array.from(selIds);
+    await Promise.allSettled(ids.map((id) => updateEmail(id, { is_favorite: 0 })));
+    setItems((prev) => prev.filter((i) => !selIds.has(i.id)));
+    setSelIds(new Set());
+  };
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  useEffect(() => {
+    if (!onSelBar) return;
+    if (selMode) onSelBar({ count: selIds.size, onCancel: () => setSelIds(new Set()), onAction: unstarSelected, label: t("unmarkImportant"), icon: <Star size={15} fill="var(--important)" color="var(--important)" /> });
+    else onSelBar(null);
+  }, [selIds]);
+  useEffect(() => () => { if (onSelBar) onSelBar(null); }, []);
+
+  const loadData = useCallback(async () => {    setLoading(true);
     try {
       const { data } = await getImportantMessages();
       setItems(data || []);
@@ -83,7 +103,7 @@ export default function ImportantList({ onSelect }) {
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: colors.surface, overflow: "hidden" }}>
-      {/* List / Empty State */}
+            {/* List / Empty State */}
       {items.length === 0 ? (
         <div
           style={{
@@ -123,19 +143,17 @@ export default function ImportantList({ onSelect }) {
               <div
                 key={item.id}
                 className="thread-row"
-                onClick={() => onSelect(item)}
+                onClick={() => { if (lpDone.current) { lpDone.current = false; return; } if (selMode) toggleSel(item.id); else onSelect(item); }}
+                onMouseDown={() => startLP(item.id)} onMouseUp={cancelLP} onMouseLeave={cancelLP}
+                onTouchStart={() => startLP(item.id)} onTouchEnd={cancelLP} onTouchMove={cancelLP} onTouchCancel={cancelLP}
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  padding: "12px 16px",
-                  cursor: "pointer",
-                  borderBottom: `1px solid ${colors.border}`,
-                  background: colors.surface,
-                  gap: 12,
+                  minHeight: 72, boxSizing: "border-box", padding: 12, margin: "0 8px", marginBottom: 4, borderRadius: "var(--r-md)", cursor: "pointer", position: "relative", background: selIds.has(item.id) ? "var(--primary-tint)" : "transparent", transform: selIds.has(item.id) ? "scale(1.02)" : "none", gap: 12, userSelect: "none",
                 }}
               >
-                {/* Avatar */}
-                <Avatar
+                <span style={{ width: 18, height: 18, borderRadius: 4, flexShrink: 0, boxSizing: "border-box", display: selMode ? "flex" : "none", alignItems: "center", justifyContent: "center", border: selIds.has(item.id) ? "2px solid var(--primary)" : "2px solid var(--border-strong)", background: selIds.has(item.id) ? "var(--primary)" : "transparent", color: "var(--on-primary)" }}>{selIds.has(item.id) ? <Check size={12} strokeWidth={3} /> : null}</span>
+                {/* Avatar */}                <Avatar
                   src={item.is_group ? item.avatar_url : item.from_avatar_url}
                   name={displayName}
                   colorKey={avatarKey}

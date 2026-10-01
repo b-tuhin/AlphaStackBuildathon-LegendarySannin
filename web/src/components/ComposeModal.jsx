@@ -291,6 +291,7 @@ export default function ComposeModal({ onClose, onSend, onSaveDraft, initialDraf
   const handleSubmit = (e) => {
     e.preventDefault();
     setError("");
+    if (!body.trim() && attachments.length === 0) return setError(t("composeEmpty"));
     if (recipients.length === 0) {
       if (recipientInput.trim()) {
         addRecipientByPhone();
@@ -710,7 +711,7 @@ export default function ComposeModal({ onClose, onSend, onSaveDraft, initialDraf
           {/* Footer */}
           <div style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: `1px solid ${colors.border}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <button type="submit" style={{ background: colors.accent, color: "var(--on-primary)", border: "none", borderRadius: 20, padding: "8px 24px", cursor: "pointer", fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }} disabled={uploading}>
+              <button type="submit" style={{ background: colors.accent, color: "var(--on-primary)", border: "none", borderRadius: 20, padding: "8px 24px", cursor: (!body.trim() && attachments.length === 0) ? "default" : "pointer", opacity: (!body.trim() && attachments.length === 0) ? 0.5 : 1, fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }} disabled={uploading || (!body.trim() && attachments.length === 0)}>
                 <Send size={14} strokeWidth={2} />
                 {t("send")}
               </button>

@@ -16,7 +16,7 @@ services:
       - NODE_ENV=development
       - PORT=4000
       - SMTP_PORT=2525
-      - MAIL_DOMAIN=phonemail.com
+      - MAIL_DOMAIN=bharatchat.com
       - JWT_SECRET=${JWT_SECRET}
       - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
       - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}

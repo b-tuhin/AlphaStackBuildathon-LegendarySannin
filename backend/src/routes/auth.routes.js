@@ -102,6 +102,15 @@ router.post("/register", (req, res) => {
   res.json(authPayload(user, { created, tosAccepted: !!tosAcceptedAt }));
 });
 
+router.post("/phone/exists", (req, res) => {
+  const phone = normalizePhone(req.body?.phone);
+  if (!isValidPhone(phone)) return res.status(400).json({ error: "Invalid phone number" });
+  const key = `exists:${phone}:${clientIp(req)}`;
+  if (isRateLimited(key, 60 * 1000, 20)) return res.status(429).json({ error: "Too many attempts. Try again later." });
+  recordFailure(key);
+  const user = db.prepare(`SELECT 1 FROM users WHERE phone = ?`).get(phone);
+  return res.json({ exists: !!user });
+});
 router.post("/login", (req, res) => {
   const phone = normalizePhone(req.body?.phone);
   if (phone && isLoginRateLimited(phone)) {

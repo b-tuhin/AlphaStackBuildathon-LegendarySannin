@@ -31,7 +31,7 @@ export default function PasswordField({
       <button
         type="button"
         className="icon-btn"
-        style={styles.toggle}
+        style={{ ...styles.toggle, zIndex: 2 }} onMouseDown={(e) => e.preventDefault()}
         onClick={() => setVisible((v) => !v)}
         tabIndex={-1}
         aria-label={visible ? "Hide password" : "Show password"}

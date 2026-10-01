@@ -19,6 +19,7 @@ import { getSenderDisplayName, getAvatarInitials, getAvatarColor, formatPhoneNum
 import Avatar from "./Avatar.jsx";
 import ThemedCheckbox from "./ThemedCheckbox.jsx";
 import { highlightText } from "../utils/textHighlight.jsx";
+import { parseServerDate } from "../utils/dateFix.js";
 
 
 export default function ThreadList({
@@ -57,8 +58,8 @@ export default function ThreadList({
         const nameB = String(b.counterpart_name || b.counterpart || b.from_name || b.from_address || "").toLowerCase();
         return nameA.localeCompare(nameB);
       }
-      const dateA = new Date(a.last_message_at || a.created_at || 0).getTime();
-      const dateB = new Date(b.last_message_at || b.created_at || 0).getTime();
+      const dateA = parseServerDate(a.last_message_at || a.created_at || 0).getTime();
+      const dateB = parseServerDate(b.last_message_at || b.created_at || 0).getTime();
       return dateB - dateA;
     });
   }, [items]);
@@ -127,7 +128,7 @@ export default function ThreadList({
 
         const dateStr = item.last_message_at || item.created_at;
         const formattedDate = dateStr
-          ? new Date(dateStr).toLocaleDateString([], { month: "short", day: "numeric" })
+          ? parseServerDate(dateStr).toLocaleDateString([], { month: "short", day: "numeric" })
           : "";
 
         const hasRealSub = Boolean(item.subject && typeof item.subject === "string" && item.subject.trim() && item.subject.trim() !== "(no subject)" && !/^[\-\u2013\u2014\s]+$/.test(item.subject));
@@ -191,7 +192,7 @@ function ThreadRow({
   const touchStartPosRef = useRef(null);
   const didLongPressRef = useRef(false);
 
-  const isTrash = folder === "trash";
+  const isTrash = folder === "trash"; const isSel = folder === "trash" || folder === "spam";
   const isImportant = Boolean(item.is_favorite);
 
   // Compute menu coordinates synchronously before paint to prevent positioning flash
@@ -261,7 +262,7 @@ function ThreadRow({
       if (navigator.vibrate) {
         try { navigator.vibrate(35); } catch {}
       }
-      if (isTrash) {
+      if (isSel) {
         if (onEnterTrashSelection) onEnterTrashSelection(item.id);
       } else {
         setMenuOpen(true);
@@ -290,7 +291,7 @@ function ThreadRow({
     clearTimeout(longPressTimerRef.current);
     longPressTimerRef.current = setTimeout(() => {
       didLongPressRef.current = true;
-      if (isTrash) {
+      if (isSel) {
         if (onEnterTrashSelection) onEnterTrashSelection(item.id);
       }
     }, 450);
@@ -314,7 +315,7 @@ function ThreadRow({
       didLongPressRef.current = false;
       return;
     }
-    if (isTrash && trashSelectionMode) {
+    if (isSel && trashSelectionMode) {
       if (onToggleSelectTrash) onToggleSelectTrash(item.id);
       return;
     }
@@ -325,7 +326,7 @@ function ThreadRow({
     onSelect(item);
   };
 
-  const bgColor = isTrash && trashSelectionMode && isTrashSelected
+  const bgColor = isSel && trashSelectionMode && isTrashSelected
     ? "var(--primary-tint)"
     : isSelected
     ? "var(--primary-tint)"
@@ -367,7 +368,7 @@ function ThreadRow({
     >
 
       {/* Trash multi-select checkbox */}
-      {isTrash && trashSelectionMode && (
+      {isSel && trashSelectionMode && (
         <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
           <ThemedCheckbox
             checked={Boolean(isTrashSelected)}

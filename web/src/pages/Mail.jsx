@@ -38,6 +38,7 @@ import { useTheme } from "../theme/ThemeContext.jsx";
 import { useI18n } from "../i18n/I18nContext.jsx";
 import { useIsMobile } from "../utils/useIsMobile.js";
 import { Trash2, X, RotateCcw, MessageCircle, Star, FileText, ShieldAlert } from "lucide-react";
+const delGate = { ok: false };
 import EmptyState from "../components/EmptyState.jsx";
 import ComposeIcon from "../components/ComposeIcon.jsx";
 
@@ -88,6 +89,8 @@ export default function Mail() {
   // Trash multi-select state
   const [trashSelectionMode, setTrashSelectionMode] = useState(false);
   const [selectedTrashIds, setSelectedTrashIds] = useState(new Set());
+  const [listSelBar, setListSelBar] = useState(null);
+  const [delAsk, setDelAsk] = useState(null);
 
   // On wide/desktop, sidebar starts open (persistent column). On narrow/mobile, it starts closed (off-canvas).
   const [sidebarOpen, setSidebarOpen] = useState(() =>
@@ -509,7 +512,7 @@ export default function Mail() {
   // Delete / Trash action
   const handleDeleteItem = async (item) => {
     try {
-      const isThread = Boolean(item.participant_a || item.participants || item.counterpart);
+      const isThread = Boolean(item.participant_a || item.participants || item.counterpart); if (folder === "trash" && !delGate.ok) { setDelAsk({ item }); return; } delGate.ok = false;
       if (folder === "trash") {
         if (isThread) {
           await deleteThread(item.id, { folder: "trash" });
@@ -640,11 +643,11 @@ export default function Mail() {
   };
 
   const handleBulkDeleteTrash = async () => {
-    if (selectedTrashIds.size === 0) return;
+    if (selectedTrashIds.size === 0) return; if (folder === "trash" && !delGate.ok) { setDelAsk({ bulk: true }); return; } delGate.ok = false;
     const ids = Array.from(selectedTrashIds);
     try {
       await Promise.allSettled(
-        ids.map((id) => deleteThread(id, { folder: "trash" }).catch(() => deleteEmail(id)))
+        ids.map((id) => folder === "spam" ? updateThread(id, { folder: "trash" }).catch(() => updateEmail(id, { folder: "trash" })) : deleteThread(id, { folder: "trash" }).catch(() => deleteEmail(id)))
       );
       setSelectedTrashIds(new Set());
       setTrashSelectionMode(false);
@@ -732,8 +735,24 @@ export default function Mail() {
                 flexShrink: 0,
               }}
             >
-              {folder === "trash" && trashSelectionMode ? (
+              {(folder === "important" || folder === "drafts") && listSelBar ? (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button type="button" className="icon-btn icon-btn-danger" onClick={listSelBar.onCancel} style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", color: colors.danger, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 4 }} title={t("selCancelBtn")} aria-label={t("selCancelBtn")}>
+                      <X size={18} strokeWidth={2} color="currentColor" />
+                    </button>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: colors.textPrimary }}>
+                      {t("selCount").replace("{n}", listSelBar.count)}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button type="button" className="btn-text" onClick={listSelBar.onAction} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 6, background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)", cursor: "pointer", fontSize: 13, fontWeight: 600 }} title={listSelBar.label}>
+                      {listSelBar.icon}
+                      <span>{listSelBar.label}</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (folder === "trash" || folder === "spam") && trashSelectionMode ? (                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <button
                       type="button"
@@ -753,13 +772,13 @@ export default function Mail() {
                         justifyContent: "center",
                         borderRadius: 4,
                       }}
-                      title="Cancel selection"
-                      aria-label="Cancel selection"
+                      title={t("selCancelBtn")}
+                      aria-label={t("selCancelBtn")}
                     >
-                      <X size={18} strokeWidth={2} color={colors.danger} />
+                      <X size={18} strokeWidth={2} color="currentColor" />
                     </button>
                     <span style={{ fontSize: 15, fontWeight: 700, color: colors.textPrimary }}>
-                      {selectedTrashIds.size} selected
+                      {t("selCount").replace("{n}", selectedTrashIds.size)}
                     </span>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -774,21 +793,21 @@ export default function Mail() {
                         gap: 6,
                         padding: "5px 12px",
                         borderRadius: 6,
-                        background: selectedTrashIds.size > 0 ? colors.accentLight : colors.surfaceAlt,
-                        border: `1px solid ${selectedTrashIds.size > 0 ? colors.accent : colors.border}`,
-                        color: selectedTrashIds.size > 0 ? colors.accent : colors.textSecondary,
+                        background: "var(--surface)",
+                        border: "1px solid var(--border)",
+                        color: selectedTrashIds.size > 0 ? "var(--text)" : "var(--muted)",
                         cursor: selectedTrashIds.size > 0 ? "pointer" : "default",
                         fontSize: 13,
                         fontWeight: 600,
                       }}
-                      title="Restore selected"
+                      title={t("selRestoreBtn")}
                     >
-                      <RotateCcw size={15} strokeWidth={2} color={selectedTrashIds.size > 0 ? colors.accent : colors.textSecondary} />
-                      <span>Restore</span>
+                      <RotateCcw size={15} strokeWidth={2} color="currentColor" />
+                      <span>{t("selRestoreBtn")}</span>
                     </button>
                     <button
                       type="button"
-                      className="icon-btn icon-btn-danger"
+                      className="btn-text"
                       onClick={handleBulkDeleteTrash}
                       disabled={selectedTrashIds.size === 0}
                       style={{
@@ -797,17 +816,17 @@ export default function Mail() {
                         gap: 6,
                         padding: "5px 12px",
                         borderRadius: 6,
-                        background: selectedTrashIds.size > 0 ? colors.dangerBg : colors.surfaceAlt,
-                        border: `1px solid ${selectedTrashIds.size > 0 ? colors.danger : colors.border}`,
-                        color: selectedTrashIds.size > 0 ? colors.danger : colors.textSecondary,
+                        background: "var(--surface)",
+                        border: "1px solid var(--border)",
+                        color: selectedTrashIds.size > 0 ? "var(--text)" : "var(--muted)",
                         cursor: selectedTrashIds.size > 0 ? "pointer" : "default",
                         fontSize: 13,
                         fontWeight: 600,
                       }}
-                      title="Permanently delete selected"
+                      title={t("selDeleteBtn")}
                     >
-                      <Trash2 size={15} strokeWidth={2} color={selectedTrashIds.size > 0 ? colors.danger : colors.textSecondary} />
-                      <span>Delete</span>
+                      <Trash2 size={15} strokeWidth={2} color="currentColor" />
+                      <span>{t("selDeleteBtn")}</span>
                     </button>
                   </div>
                 </div>
@@ -837,7 +856,7 @@ export default function Mail() {
                         : "Chats"}
                     </h1>
                   </div>
-                  {folder === "trash" && items.length > 0 && (
+                  {(folder === "trash" || folder === "spam") && items.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setTrashSelectionMode(true)}
@@ -852,7 +871,7 @@ export default function Mail() {
                         fontWeight: 600,
                       }}
                     >
-                      Select
+                      {t("selSelectBtn")}
                     </button>
                   )}
                 </>
@@ -862,6 +881,7 @@ export default function Mail() {
             <div key={folder} className="view-fade" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", paddingBottom: isNarrow ? "calc(72px + env(safe-area-inset-bottom, 0px))" : 0 }}>
             {folder === "important" ? (
               <ImportantList
+                onSelBar={setListSelBar}
                 onSelect={(item) => {
                   
                   setSelectedItem({
@@ -871,7 +891,7 @@ export default function Mail() {
                 }}
               />
             ) : folder === "drafts" ? (
-              <DraftsList drafts={drafts} onOpen={handleOpenDraft} onDelete={handleDeleteDraft} />
+              <DraftsList drafts={drafts} onOpen={handleOpenDraft} onDelete={handleDeleteDraft} onSelBar={setListSelBar} />
             ) : (
               <>
                 {/* Filter Chips above list */}
@@ -902,7 +922,22 @@ export default function Mail() {
             )}
             </div>
 
-            {/* Scoped Floating Action Button for composing new message */}
+            {delAsk && (
+        <div className="formal-overlay-backdrop" onClick={() => setDelAsk(null)} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div className="formal-overlay-card" onClick={(e) => e.stopPropagation()} role="alertdialog" aria-modal="true" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 16, padding: 24, maxWidth: 380, width: "100%", boxShadow: "var(--shadow-sm)", display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Trash2 size={22} strokeWidth={2} color="var(--primary)" />
+              <h3 style={{ margin: 0, fontSize: 18, color: "var(--text)" }}>{t("delConfirmTitle")}</h3>
+            </div>
+            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--muted)" }}>{t("delConfirmBody")}</p>
+            <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+              <button type="button" onClick={() => setDelAsk(null)} style={{ flex: 1, minHeight: 44, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontWeight: 600, cursor: "pointer" }}>{t("selCancelBtn")}</button>
+              <button type="button" onClick={() => { const a = delAsk; setDelAsk(null); delGate.ok = true; if (a.bulk) handleBulkDeleteTrash(); else handleDeleteItem(a.item); }} style={{ flex: 1, minHeight: 44, borderRadius: 8, border: "none", background: "var(--primary)", color: "var(--on-primary)", fontWeight: 600, cursor: "pointer" }}>{t("selDeleteBtn")}</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Scoped Floating Action Button for composing new message */}
             {(
               <button
                 type="button"

@@ -72,6 +72,10 @@ import VoiceLanguageMenu from "./VoiceLanguageMenu.jsx";
 import PlaceholderResolverBar from "./PlaceholderResolverBar.jsx";
 import { translateInBrowser } from "../utils/translateFallback.js";
 import { highlightText } from "../utils/textHighlight.jsx";
+import { parseServerDate } from "../utils/dateFix.js";
+import { updateThread as updateThreadApi } from "../api/client.js";
+import { ShieldAlert as SpamIcon } from "lucide-react";
+import { ChevronDown as MoreArrowIcon } from "lucide-react";
 
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
@@ -350,7 +354,7 @@ function MessageBubbleItem({
   const msgAvatarBg = getAvatarColor(msg.from_address);
 
   const timeStr = msg.created_at
-    ? new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    ? parseServerDate(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : "";
 
   const msgAttachments = Array.isArray(msg.attachments)
@@ -683,7 +687,7 @@ function MessageBubbleItem({
             transform: `translateX(${swipeOffset}px)`,
             transition: isSnapping
               ? "transform 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275)"
-              : (swipeOffset !== 0 ? "none" : "background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease"),
+              : (swipeOffset !== 0 ? "none" : "background 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease, scale 0.45s cubic-bezier(0.34, 1.4, 0.64, 1)"),
             touchAction: "pan-y",
             userSelect: "text",
             cursor: selectionMode ? "pointer" : "default",
@@ -1439,7 +1443,7 @@ function MessageBubbleItem({
                   opacity: 0.7,
                   fontStyle: "italic",
                 }}
-                title={msg.edited_at ? `Edited at ${new Date(msg.edited_at).toLocaleTimeString()}` : "Edited"}
+                title={msg.edited_at ? `Edited at ${parseServerDate(msg.edited_at).toLocaleTimeString()}` : "Edited"}
               >
                 (edited)
               </span>
@@ -1696,6 +1700,8 @@ export default function ChatView({
 
   // ── Formal View Overlay State & Handlers ──────────────────────────────────
   const [formalOverlayMsg, setFormalOverlayMsg] = useState(null);
+  const [formalMoreOpen, setFormalMoreOpen] = useState(false);
+  useEffect(() => { setFormalMoreOpen(false); }, [formalOverlayMsg?.id]);
   const [isFormalClosing, setIsFormalClosing] = useState(false);
   const [formalDeletingConfirm, setFormalDeletingConfirm] = useState(false);
 
@@ -2300,7 +2306,7 @@ export default function ChatView({
     ? (formalIsOwn ? (me?.display_name || "You") : (formalOverlayMsg.from_name || formalOverlayMsg.from_display || formatPhoneNumber(formalOverlayMsg.from_address || "")))
     : "";
   const formalFormattedDate = formalOverlayMsg?.created_at
-    ? new Date(formalOverlayMsg.created_at).toLocaleString([], {
+    ? parseServerDate(formalOverlayMsg.created_at).toLocaleString([], {
         weekday: "short",
         year: "numeric",
         month: "short",
@@ -2702,14 +2708,14 @@ export default function ChatView({
             const isSameGroup = prevMsg && prevMsg.from_address === msg.from_address;
             const topGap = isSameGroup ? 6 : 14;
 
-            const msgDate = msg.created_at ? new Date(msg.created_at).toDateString() : null;
-            const prevDate = prevMsg?.created_at ? new Date(prevMsg.created_at).toDateString() : null;
+            const msgDate = msg.created_at ? parseServerDate(msg.created_at).toDateString() : null;
+            const prevDate = prevMsg?.created_at ? parseServerDate(prevMsg.created_at).toDateString() : null;
             const showDateSeparator = Boolean(msgDate && msgDate !== prevDate);
-            const dateLabel = msg.created_at ? new Date(msg.created_at).toLocaleDateString([], {
+            const dateLabel = msg.created_at ? parseServerDate(msg.created_at).toLocaleDateString([], {
               weekday: "short",
               month: "short",
               day: "numeric",
-              ...(new Date(msg.created_at).getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {})
+              ...(parseServerDate(msg.created_at).getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {})
             }) : "";
 
             return (
@@ -3363,7 +3369,7 @@ export default function ChatView({
               </div>
 
               {/* Action Toolbar (Icon-only actions identical to dropdown menu) */}
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, position: "relative" }}>
                 {formalDeletingConfirm ? (
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <span style={{ fontSize: 12, color: "var(--danger)", fontWeight: 500, whiteSpace: "nowrap" }}>
@@ -3493,6 +3499,8 @@ export default function ChatView({
                       <Star size={16} strokeWidth={2} fill={formalOverlayMsg.is_favorite ? "var(--important)" : "none"} />
                     </button>
 
+                    {(!isMobile || formalMoreOpen) && (
+                    <div style={isMobile ? { position: "absolute", top: "100%", right: 0, marginTop: 6, display: "flex", alignItems: "center", gap: 4, padding: 4, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "var(--shadow-sm)", zIndex: 5 } : { display: "contents" }}>
                     {/* Read Aloud (TTS) with auto language detection and animated equalizer */}
                     {isSpeechSynthesisSupported() && (
                       <button
@@ -3589,6 +3597,8 @@ export default function ChatView({
                         <ComposeIcon size={16} strokeWidth={2} />
                       </button>
                     )}
+                    </div>
+                    )}
 
                     {/* Delete (own messages only) */}
                     {formalIsOwn && (
@@ -3614,6 +3624,11 @@ export default function ChatView({
                       </button>
                     )}
 
+                    {isMobile && (
+                      <button type="button" className="icon-btn" onClick={() => setFormalMoreOpen((v) => !v)} aria-expanded={formalMoreOpen} style={{ background: "none", border: "none", cursor: "pointer", padding: "6px", borderRadius: 6, color: "var(--muted)", display: "flex", alignItems: "center", justifyContent: "center" }} title={t("moreActions")} aria-label={t("moreActions")}>
+                        <MoreArrowIcon size={16} strokeWidth={2} style={{ transform: formalMoreOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }} />
+                      </button>
+                    )}
                     <div style={{ width: 1, height: 18, background: colors.border, margin: "0 4px" }} />
 
                     {/* Close (X) button */}
@@ -3746,7 +3761,7 @@ export default function ChatView({
                     </span>
                     {formalOverlayMsg.edited_at && (
                       <span style={{ marginLeft: 8, fontStyle: "italic", opacity: 0.75 }}>
-                        (edited {new Date(formalOverlayMsg.edited_at).toLocaleTimeString()})
+                        (edited {parseServerDate(formalOverlayMsg.edited_at).toLocaleTimeString()})
                       </span>
                     )}
                   </div>
@@ -4151,6 +4166,23 @@ export default function ChatView({
                     </div>
                   )}
                 </div>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const nextFolder = folder === "spam" ? "home" : "spam";
+                    try {
+                      await updateThreadApi(thread.id, { folder: nextFolder });
+                      setContactModalOpen(false);
+                      if (onThreadUpdated) onThreadUpdated(thread.id, { folder: nextFolder });
+                      if (onBack) onBack();
+                    } catch {}
+                  }}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", minHeight: 44, borderRadius: 8, background: "transparent", border: `1px solid ${colors.danger}`, color: colors.danger, fontWeight: 600, cursor: "pointer" }}
+                >
+                  <SpamIcon size={16} strokeWidth={2} />
+                  <span>{folder === "spam" ? t("spamUnmark") : t("spamMark")}</span>
+                </button>
 
                 <button
                   type="button"

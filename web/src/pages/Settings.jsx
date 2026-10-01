@@ -51,14 +51,13 @@ function WallpaperPickerSection({ colors }) {
   }, []);
 
   const pick = (fileOrNull) => {
-    setSelected(fileOrNull);
+    setSelected(fileOrNull || "none");
     try {
-      if (fileOrNull) localStorage.setItem("chatWallpaper", fileOrNull);
-      else localStorage.removeItem("chatWallpaper");
+      localStorage.setItem("chatWallpaper", fileOrNull || "none");
     } catch {}
     // Notify ChatView in same tab immediately (storage event only fires cross-tab)
     try {
-      window.dispatchEvent(new CustomEvent("chatWallpaperChange", { detail: fileOrNull }));
+      window.dispatchEvent(new CustomEvent("chatWallpaperChange", { detail: fileOrNull || "none" }));
     } catch {}
   };
 
@@ -72,7 +71,7 @@ function WallpaperPickerSection({ colors }) {
     marginBottom: 6,
   };
 
-  const on = !!selected;
+  const on = selected !== "none";
   const firstFile = (manifest.find((w) => w.file && w.enabled !== false) || {}).file || null;
   const toggleWallpaper = () => {
     if (on) pick(null);
@@ -92,14 +91,12 @@ function WallpaperPickerSection({ colors }) {
           role="switch"
           aria-checked={on}
           aria-label="Show wallpaper in chats"
-          data-ui-exempt="true"
           disabled={!on && !firstFile}
           onClick={toggleWallpaper}
           style={{
             position: "relative",
             width: 44,
-            height: 24,
-            minWidth: 44,
+            height: 24, minHeight: 24, maxHeight: 24, maxWidth: 44, boxSizing: "border-box", minWidth: 44,
             padding: 0,
             borderRadius: 12,
             border: "none",
@@ -451,21 +448,21 @@ export default function Settings({ me: initialMe, onBack, onUpdated }) {
                 {showAvatarMenu && (
                   <>
                     <div onClick={() => setShowAvatarMenu(false)} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 40 }} />
-                    <div style={{ position: "absolute", top: 92, left: 0, width: 290, zIndex: 41, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", boxShadow: "var(--shadow-sm)", padding: 12 }}>
+                    <div style={{ position: "absolute", top: 92, left: 0, width: 340, maxWidth: "calc(100vw - 48px)", boxSizing: "border-box", zIndex: 41, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-lg)", boxShadow: "var(--shadow-sm)", padding: 12 }}>
                       <div style={{ display: "flex", gap: 10 }}>
-                        <button type="button" data-ui-exempt="true" onClick={() => { setShowAvatarMenu(false); avatarInputRef.current && avatarInputRef.current.click(); }} style={{ flex: 1, padding: "14px 8px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: "var(--r-md)", border: "1px solid var(--border)", background: "var(--surface)", color: colors.textPrimary, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                        <button type="button" onClick={() => { setShowAvatarMenu(false); avatarInputRef.current && avatarInputRef.current.click(); }} style={{ flex: 1, minWidth: 0, padding: "14px 8px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: "var(--r-md)", border: "1px solid var(--border)", background: "var(--surface)", color: colors.textPrimary, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                           <UploadIcon size={22} strokeWidth={2} color={colors.accent} /><span>{t("uploadPhoto")}</span>
                         </button>
-                        <button type="button" data-ui-exempt="true" disabled={!avatarSrc} onClick={() => { setPresetId(null); setShowAvatarMenu(false); handleAvatarRemove(); }} style={{ flex: 1, padding: "14px 8px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: "var(--r-md)", border: "1px solid var(--border)", background: "var(--surface)", color: colors.textPrimary, fontSize: 13, fontWeight: 600, cursor: avatarSrc ? "pointer" : "not-allowed", opacity: avatarSrc ? 1 : 0.4 }}>
+                        <button type="button" disabled={!avatarSrc} onClick={() => { setPresetId(null); setShowAvatarMenu(false); handleAvatarRemove(); }} style={{ flex: 1, minWidth: 0, padding: "14px 8px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, borderRadius: "var(--r-md)", border: "1px solid var(--border)", background: "var(--surface)", color: colors.textPrimary, fontSize: 13, fontWeight: 600, cursor: avatarSrc ? "pointer" : "not-allowed", opacity: avatarSrc ? 1 : 0.4 }}>
                           <TrashIcon size={22} strokeWidth={2} color={colors.textSecondary} /><span>{t("removePhoto")}</span>
                         </button>
                       </div>
                       <div style={{ margin: "12px 0 8px 0", fontSize: 12, fontWeight: 700, color: colors.textPrimary }}>{t("chooseAvatar")}</div>
                       <div style={{ display: "flex", gap: 14, justifyContent: "center" }}>
-                        <button type="button" data-ui-exempt="true" onClick={() => handlePresetAvatar("avatar-girl")} title={t("avatarGirlLabel")} aria-label={t("avatarGirlLabel")} style={{ width: 80, height: 80, minWidth: 80, minHeight: 80, maxWidth: 80, maxHeight: 80, flexShrink: 0, padding: 0, borderRadius: "50%", overflow: "hidden", cursor: "pointer", background: "transparent", border: presetId === "avatar-girl" ? "2px solid var(--primary)" : "2px solid transparent" }}>
+                        <button type="button" onClick={() => handlePresetAvatar("avatar-girl")} title={t("avatarGirlLabel")} aria-label={t("avatarGirlLabel")} style={{ width: 80, height: 80, minWidth: 80, minHeight: 80, maxWidth: 80, maxHeight: 80, flexShrink: 0, padding: 0, borderRadius: "50%", overflow: "hidden", cursor: "pointer", background: "transparent", border: presetId === "avatar-girl" ? "2px solid var(--primary)" : "2px solid transparent" }}>
                           <img src={getAsset("avatar-girl").url} alt={t("avatarGirlLabel")} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                         </button>
-                        <button type="button" data-ui-exempt="true" onClick={() => handlePresetAvatar("avatar-boy")} title={t("avatarBoyLabel")} aria-label={t("avatarBoyLabel")} style={{ width: 80, height: 80, minWidth: 80, minHeight: 80, maxWidth: 80, maxHeight: 80, flexShrink: 0, padding: 0, borderRadius: "50%", overflow: "hidden", cursor: "pointer", background: "transparent", border: presetId === "avatar-boy" ? "2px solid var(--primary)" : "2px solid transparent" }}>
+                        <button type="button" onClick={() => handlePresetAvatar("avatar-boy")} title={t("avatarBoyLabel")} aria-label={t("avatarBoyLabel")} style={{ width: 80, height: 80, minWidth: 80, minHeight: 80, maxWidth: 80, maxHeight: 80, flexShrink: 0, padding: 0, borderRadius: "50%", overflow: "hidden", cursor: "pointer", background: "transparent", border: presetId === "avatar-boy" ? "2px solid var(--primary)" : "2px solid transparent" }}>
                           <img src={getAsset("avatar-boy").url} alt={t("avatarBoyLabel")} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                         </button>
                       </div>
