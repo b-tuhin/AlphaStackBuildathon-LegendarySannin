@@ -77,6 +77,7 @@ export default function Mail() {
   const [emails, setEmails] = useState([]);
   const [drafts, setDrafts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
   // Live badge counts for Important and Trash
@@ -264,6 +265,7 @@ export default function Mail() {
     }
 
     setLoading(true);
+    setLoadError(false);
     try {
       if (folder === "home" || folder === "trash" || folder === "spam") {
         const { data } = await getThreads({
@@ -293,7 +295,7 @@ export default function Mail() {
         }
       }
     } catch (e) {
-      console.error("[Mail] Load error:", e.message);
+      console.error("[Mail] Load error:", e.message); setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -894,6 +896,12 @@ export default function Mail() {
               <DraftsList drafts={drafts} onOpen={handleOpenDraft} onDelete={handleDeleteDraft} onSelBar={setListSelBar} />
             ) : (
               <>
+                {loadError && (
+                  <div role="alert" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, margin: "8px 8px 0", padding: "10px 12px", borderRadius: "var(--r-md)", background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)", fontSize: 13 }}>
+                    <span>{t("loadFailed")}</span>
+                    <button type="button" onClick={() => loadData()} style={{ border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", borderRadius: 8, padding: "6px 12px", minHeight: 36, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>{t("loadRetry")}</button>
+                  </div>
+                )}
                 {/* Filter Chips above list */}
                 <FilterChips active={filter} onChange={setFilter} />
 

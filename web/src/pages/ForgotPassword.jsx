@@ -46,6 +46,7 @@ export default function ForgotPassword() {
   const [error, setError]             = useState("");
   const [loading, setLoading]         = useState(false);
   const navigate = useNavigate();
+  const PW_ONLY = true; // password-only mode: no SMS reset codes
   const isNarrow = useIsMobile(1023);
   const { t } = useI18n();
 
@@ -97,9 +98,9 @@ export default function ForgotPassword() {
           <Logo size={40} />
           <h1 style={{ ...styles.logo, margin: 0 }}>{APP_NAME}</h1>
         </div>
-        <p style={styles.tagline}>{t("fpTagline")}</p>
+        {!PW_ONLY && <p style={styles.tagline}>{t("fpTagline")}</p>}
 
-        {step === "request" ? (
+        {PW_ONLY ? (<p style={styles.hint} role="status">{t("fpNoSms")}</p>) : step === "request" ? (
           <form onSubmit={requestCode}>
             <label style={styles.label}>{t("fpPhone")}</label>
             <input

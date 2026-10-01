@@ -88,7 +88,7 @@ export default function AuthFlow({ initialMode = "login" }) {
   const handleOtpSubmit = async (e) => {
     e?.preventDefault();
     setError("");
-    if (!/^\d{4,10}$/.test(otpCode)) { setError("Enter the verification code sent by SMS."); return; }
+    if (!/^\d{4,10}$/.test(otpCode)) { setError(t("afErrCode")); return; }
     setLoading(true);
     try {
       const { data } = await checkPhoneOtp(phone, otpCode, "signup");
@@ -123,9 +123,9 @@ export default function AuthFlow({ initialMode = "login" }) {
     e?.preventDefault();
     setError("");
     if (mode === "register") {
-      if (phoneOtpRequired && !signupGrant) { setError("Verify your phone number first."); return; }
-      if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
-      if (password !== confirmPassword) { setError("Passwords do not match."); return; }
+      if (phoneOtpRequired && !signupGrant) { setError(t("afErrVerify")); return; }
+      if (password.length < 8) { setError(t("fpErrLen")); return; }
+      if (password !== confirmPassword) { setError(t("fpErrMatch")); return; }
     }
     setLoading(true);
     try {
@@ -533,7 +533,7 @@ export default function AuthFlow({ initialMode = "login" }) {
                   </div>
                 )}
                 <button type="submit" disabled={loading || (mode === "register" && !termsAgreed)} className="btn-primary" style={{ width: "100%", minHeight: 48, height: 48, background: "var(--primary)", color: "var(--on-primary)", borderRadius: "var(--r-md)", fontSize: 15, fontWeight: 600 }}>
-                  {loading ? "Please wait..." : "Next"}
+                  {loading ? t("afWait") : t("afNext")}
                 </button>
                 {mode === "login" && (
                   <p style={{ margin: "12px 0 0", fontSize: 12, lineHeight: 1.4, textAlign: "center", color: colors.textSecondary }}>
@@ -553,7 +553,7 @@ export default function AuthFlow({ initialMode = "login" }) {
                 <h2 style={{ margin: "0 0 6px 0", fontSize: 20, fontWeight: 700, color: colors.textPrimary }}>{t("afCodeTitle")}</h2>
                 <p>We sent a one-time code to {phone}. Your browser may offer to autofill it.</p>
                 <input name="otpCode" type="text" inputMode="numeric" autoComplete="one-time-code" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 10))} maxLength={10} autoFocus />
-                <button type="submit" disabled={loading} className="btn-primary" style={{ width: "100%", minHeight: 48, marginTop: 16 }}>{loading ? "Please wait..." : "Next"}</button>
+                <button type="submit" disabled={loading} className="btn-primary" style={{ width: "100%", minHeight: 48, marginTop: 16 }}>{loading ? t("afWait") : t("afNext")}</button>
                 <button type="button" disabled={loading || resendSeconds > 0} className="btn-secondary" style={{ width: "100%", marginTop: 10 }} onClick={handleResendOtp}>{resendSeconds ? `Resend code in ${resendSeconds}s` : "Resend code"}</button>
               </form>
             )}
@@ -563,7 +563,7 @@ export default function AuthFlow({ initialMode = "login" }) {
               <form onSubmit={handleAuthSubmit}>
                 <div style={{ textAlign: "center", marginBottom: 18 }}>
                   <h2 style={{ margin: "0 0 6px 0", fontSize: 20, fontWeight: 700, color: colors.textPrimary }}>
-                    {mode === "register" ? "Create your password" : "Enter your password"}
+                    {mode === "register" ? t("afCreatePw") : t("afEnterPw")}
                   </h2>
                   <div
                     style={{
@@ -654,7 +654,7 @@ export default function AuthFlow({ initialMode = "login" }) {
                     fontWeight: 600,
                   }}
                 >
-                  {loading ? "Please wait..." : mode === "register" ? "Create Account & Enter" : "Sign In"}
+                  {loading ? t("afWait") : mode === "register" ? t("afCreateEnter") : t("afSignIn")}
                 </button>
 
                 <button
