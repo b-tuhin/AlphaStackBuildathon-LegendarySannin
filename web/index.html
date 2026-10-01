@@ -3,10 +3,83 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PhoneMail</title>
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#1F3A6E" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#161513" media="(prefers-color-scheme: dark)" />
+
+    <title>Bharat Chat — Official Civic Email Service</title>
+    <meta name="description" content="Bharat Chat provides official, accessible, phone-number-based civic email service for every citizen." />
+
+    <!-- Open Graph / Social Sharing -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Bharat Chat — Official Civic Email Service" />
+    <meta property="og:description" content="Secure, accessible, phone-number-based civic email communication for all citizens." />
+    <meta property="og:image" content="/assets/login-desktop.webp" />
+
+    <!-- Twitter Cards -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Bharat Chat — Official Civic Email Service" />
+    <meta name="twitter:description" content="Secure, accessible, phone-number-based civic email communication for all citizens." />
+    <meta name="twitter:image" content="/assets/login-desktop.webp" />
+
+    <script>
+      window.__splashStart = Date.now();
+      try { if (localStorage.getItem("phonemail_web_theme") === "dark") document.documentElement.setAttribute("data-splash-dark", "1"); } catch (e) {}
+    </script>
+    <style>
+      #splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #FBF6F4; z-index: 9999; transition: opacity 300ms ease; }
+      html[data-splash-dark="1"] #splash { background: #121212; }
+      .splash-logo { width: 160px; height: 160px; object-fit: contain; }
+      .splash-name { margin-top: 16px; font: 700 28px/1.2 "Noto Sans", sans-serif; color: #2A1A20; }
+      html[data-splash-dark="1"] .splash-name { color: #ECECEC; }
+      @media (max-width: 480px) { .splash-logo { width: 140px; height: 140px; } }
+    </style>
+    <!-- Early theme detection to avoid flash of wrong theme before first paint -->
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem("theme") || localStorage.getItem("phonemail_web_theme");
+          var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+          if (t === "dark" || (t === "auto" && prefersDark) || (!t && prefersDark)) {
+            document.documentElement.setAttribute("data-theme", "dark");
+          } else {
+            document.documentElement.setAttribute("data-theme", "light");
+          }
+        } catch(e) {}
+      })();
+    </script>
+
+    <!-- Noto Sans: Latin + Devanagari (bilingual-ready) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap"
+    />
+    <link rel="icon" type="image/png" href="/assets/logo-mark.png" />
+    <link rel="manifest" href="/manifest.json" />
   </head>
   <body>
+    <div id="splash">
+      <img class="splash-logo" src="/assets/logo-mark.png" alt="" />
+      <div class="splash-name">Bharat Chat</div>
+    </div>
+    <!-- Skip to main content — WCAG 2.4.1 -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
     <div id="root"></div>
+    <!-- TEMP-ERROR-CATCHER: remove after confirming blank-page bug is fixed -->
+    <script>
+      (function() {
+        function showErr(msg, src, line) {
+          var d = document.createElement('div');
+          d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#fff;color:#b00;padding:12px;font:14px monospace;white-space:pre-wrap;pointer-events:none;';
+          d.textContent = '[ERROR] ' + msg + (src ? '\n  at ' + src + ':' + line : '');
+          document.body.appendChild(d);
+        }
+        window.addEventListener('error', function(e) { showErr(e.message, e.filename, e.lineno); });
+        window.addEventListener('unhandledrejection', function(e) { showErr(String(e.reason && e.reason.message || e.reason || e), '', ''); });
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
+

@@ -69,7 +69,13 @@ export default function FolderListScreen({ folder, title, emptyLabel, navigation
         <TouchableOpacity onPress={handleGoBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{title}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {folder === "important" && <Ionicons name="star" size={20} color="#f59e0b" />}
+          {folder === "spam" && <Ionicons name="alert-circle-outline" size={20} color="#fff" />}
+          {folder === "trash" && <Ionicons name="trash-outline" size={20} color="#fff" />}
+          {folder === "drafts" && <Ionicons name="document-text-outline" size={20} color="#fff" />}
+          <Text style={styles.headerTitle}>{title}</Text>
+        </View>
         <View style={{ width: 24 }} />
       </View>
 

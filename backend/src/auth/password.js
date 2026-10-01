@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
+import { parsePhoneNumberFromString } from "libphonenumber-js";
 
 export const hashPassword = (plain) => bcrypt.hashSync(plain, 10);
 export const verifyPassword = (plain, hash) => !!hash && bcrypt.compareSync(plain, hash);
@@ -11,12 +12,16 @@ export function generateTempPassword(length = 10) {
   return Array.from(bytes, (b) => TEMP_ALPHABET[b % TEMP_ALPHABET.length]).join("");
 }
 
-export function normalizePhone(value) {
-  return String(value || "").replace(/[^\d]/g, "");
+/** Normalize user input to canonical E.164. Unprefixed input defaults to India. */
+export function normalizePhone(value, defaultCountry = "IN") {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const parsed = parsePhoneNumberFromString(raw, defaultCountry);
+  return parsed?.isValid() ? parsed.number : "";
 }
 
 export function isValidPhone(phone) {
-  return /^\d{7,15}$/.test(phone);
+  return /^\+[1-9]\d{6,14}$/.test(String(phone || ""));
 }
 
 export function assertPassword(password, confirmPassword) {

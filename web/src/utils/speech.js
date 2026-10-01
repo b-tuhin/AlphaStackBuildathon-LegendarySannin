@@ -317,3 +317,76 @@ export async function speakText(text, langCode, { onStart, onEnd, onError, onVoi
     return null;
   }
 }
+
+/**
+ * Lightweight script-based language detector based on Unicode code points.
+ * Returns language code: "hi", "mr", "ta", "te", "bn", "pa", "gu", or "en".
+ * When ambiguous (Devanagari = Hindi or Marathi), defaults to preferredLang if matching,
+ * else defaults to "hi".
+ */
+export function detectScriptLanguage(text, preferredLang = "en") {
+  if (!text || typeof text !== "string") return preferredLang || "en";
+
+  let devanagariCount = 0;
+  let tamilCount = 0;
+  let teluguCount = 0;
+  let bengaliCount = 0;
+  let gurmukhiCount = 0;
+  let gujaratiCount = 0;
+  let latinCount = 0;
+
+  for (let i = 0; i < text.length; i++) {
+    const cp = text.charCodeAt(i);
+    if (cp >= 0x0900 && cp <= 0x097f) devanagariCount++;
+    else if (cp >= 0x0b80 && cp <= 0x0bff) tamilCount++;
+    else if (cp >= 0x0c00 && cp <= 0x0c7f) teluguCount++;
+    else if (cp >= 0x0980 && cp <= 0x09ff) bengaliCount++;
+    else if (cp >= 0x0a00 && cp <= 0x0a7f) gurmukhiCount++;
+    else if (cp >= 0x0a80 && cp <= 0x0aff) gujaratiCount++;
+    else if ((cp >= 0x0041 && cp <= 0x005a) || (cp >= 0x0061 && cp <= 0x007a)) latinCount++;
+  }
+
+  const counts = [
+    { lang: "devanagari", count: devanagariCount },
+    { lang: "ta", count: tamilCount },
+    { lang: "te", count: teluguCount },
+    { lang: "bn", count: bengaliCount },
+    { lang: "pa", count: gurmukhiCount },
+    { lang: "gu", count: gujaratiCount },
+    { lang: "en", count: latinCount },
+  ];
+
+  counts.sort((a, b) => b.count - a.count);
+  const top = counts[0];
+  if (!top || top.count === 0) return preferredLang || "en";
+
+  if (top.lang === "devanagari") {
+    // If preferredLang is Marathi, prefer Marathi; otherwise default to Hindi
+    return preferredLang === "mr" ? "mr" : "hi";
+  }
+
+  return top.lang;
+}
+
+/**
+ * Returns matching voice code for speech synthesis from a language code (e.g. "hi" -> "hi-IN").
+ */
+export function getVoiceLangForCode(langCode) {
+  if (!langCode) return "en-IN";
+  const norm = langCode.toLowerCase().split("-")[0];
+  const map = {
+    en: "en-IN",
+    hi: "hi-IN",
+    ta: "ta-IN",
+    te: "te-IN",
+    bn: "bn-IN",
+    mr: "mr-IN",
+    pa: "pa-IN",
+    gu: "gu-IN",
+    kn: "kn-IN",
+    ml: "ml-IN",
+    ur: "ur-IN",
+  };
+  return map[norm] || `${norm}-IN`;
+}
+

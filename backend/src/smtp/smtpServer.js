@@ -3,6 +3,7 @@ import { simpleParser } from "mailparser";
 import { db } from "../db/database.js";
 import { config } from "../config.js";
 import { ingestEmail, normalizeAddress } from "./mailEngine.js";
+import { normalizePhone } from "../auth/password.js";
 
 export function startSmtpServer() {
   const server = new SMTPServer({
@@ -15,18 +16,21 @@ export function startSmtpServer() {
       if (!addr.endsWith(`@${config.mailDomain}`)) {
         return cb(new Error(`550 Relay denied: only @${config.mailDomain} accepted`));
       }
-      const localPart = addr.split("@")[0];
-      const user = db.prepare(`SELECT id FROM users WHERE phone = ? OR aliases LIKE ?`)
-        .get(localPart, `%"${localPart}"%`);
+      const localPart = addr.split("@")[0].replace(/[^\d]/g, "");
+      const canonicalPhone = normalizePhone(`+${localPart}`);
+      const rawLocal = addr.split("@")[0].toLowerCase();
+      const user = db.prepare(
+        `SELECT id FROM users WHERE phone = ? OR email_address = ? OR id IN (SELECT user_id FROM alias_map WHERE alias = ?)`
+      ).get(canonicalPhone, addr, rawLocal);
       if (!user) return cb(new Error(`550 No such user: ${addr}`));
       cb();
     },
 
     onData(stream, session, cb) {
       simpleParser(stream)
-        .then((parsed) => {
+        .then(async (parsed) => {
           const to = session.envelope.rcptTo.map(r => r.address);
-          ingestEmail({
+          await ingestEmail({
             from: parsed.from?.value?.[0]?.address || session.envelope.mailFrom.address,
             to,
             subject: parsed.subject,

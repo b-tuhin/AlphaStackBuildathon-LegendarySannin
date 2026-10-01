@@ -7,7 +7,7 @@ export function passwordStrength(password) {
   if (/\d/.test(pw)) score += 1;
   if (/[^A-Za-z0-9]/.test(pw)) score += 1;
   const labels = ["Too short", "Weak", "Fair", "Good", "Strong", "Excellent"];
-  const colors = ["#d93025", "#d93025", "#e37400", "#f9ab00", "#188038", "#137333"];
+  const colors = ["var(--danger)", "var(--danger)", "var(--important)", "var(--important)", "var(--success)", "var(--success)"];
   return {
     score,
     label: pw ? labels[score] : "",

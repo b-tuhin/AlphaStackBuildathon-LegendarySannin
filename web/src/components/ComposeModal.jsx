@@ -1,9 +1,12 @@
+import { EMAIL_DOMAIN } from "../config/brand.js";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { X, Paperclip, Mic, MicOff, Globe, Sparkles, Send, Lock } from "lucide-react";
 import { uploadAttachment, assistDraft, lookupPhone, getFamiliarRecipients } from "../api/client.js";
 import VoiceLanguageMenu from "./VoiceLanguageMenu.jsx";
+import PlaceholderResolverBar from "./PlaceholderResolverBar.jsx";
 import { useTheme } from "../theme/ThemeContext.jsx";
 import { useI18n } from "../i18n/I18nContext.jsx";
+import { useIsMobile } from "../utils/useIsMobile.js";
 import {
   VOICE_LANGUAGES,
   getSavedSpeechLang,
@@ -29,9 +32,29 @@ function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
-export default function ComposeModal({ onClose, onSend, initialDraft }) {
+function isActualSubjectValue(candidate, ...bodyTexts) {
+  if (!candidate || typeof candidate !== "string") return false;
+  const cleanSub = candidate.trim();
+  if (!cleanSub) return false;
+  if (/^\(?no subject\)?$/i.test(cleanSub) || cleanSub === "-") return false;
+
+  for (const b of bodyTexts) {
+    if (b && typeof b === "string") {
+      const cleanBody = b.trim();
+      if (!cleanBody) continue;
+      if (cleanSub.toLowerCase() === cleanBody.toLowerCase()) return false;
+      if (cleanBody.toLowerCase().startsWith(cleanSub.toLowerCase()) && cleanSub.length >= 3) return false;
+      if (cleanSub.toLowerCase().startsWith(cleanBody.toLowerCase()) && cleanBody.length >= 3) return false;
+    }
+  }
+
+  return true;
+}
+
+export default function ComposeModal({ onClose, onSend, onSaveDraft, initialDraft, closing = false, fixed = false }) {
   const { colors } = useTheme();
   const { t } = useI18n();
+  const isMobile = useIsMobile(1023);
 
   const [recipients, setRecipients]   = useState(() => {
     if (initialDraft?.to) {
@@ -40,7 +63,7 @@ export default function ComposeModal({ onClose, onSend, initialDraft }) {
         const phone = addr.split("@")[0].replace(/[^\d]/g, "");
         return {
           phone: phone || addr,
-          email_address: addr.includes("@") ? addr : `${phone}@phonemail.com`,
+          email_address: addr.includes("@") ? addr : `${phone}@${EMAIL_DOMAIN}`,
           display_name: phone || addr,
         };
       });
@@ -99,7 +122,7 @@ export default function ComposeModal({ onClose, onSend, initialDraft }) {
         setShowSuggestions(false);
       }
     } catch (e) {
-      setRecipientError("Not a registered PhoneMail user");
+      setRecipientError("Not a registered user");
     } finally {
       setLookingUp(false);
     }
@@ -135,9 +158,10 @@ export default function ComposeModal({ onClose, onSend, initialDraft }) {
       .slice(0, 6);
   }, [familiarList, recipientInput, recipients]);
 
-  const [subject, setSubject]         = useState(initialDraft?.subject || "");
+  const [subject, setSubject]         = useState(() => (isActualSubjectValue(initialDraft?.subject, initialDraft?.body) ? initialDraft.subject.trim() : ""));
   const [body, setBody]               = useState(initialDraft?.body || "");
   const [attachments, setAttachments] = useState(initialDraft?.attachments || []);
+  const draftIdRef = useRef(initialDraft?.draftId || null);
   const [uploading, setUploading]     = useState(false);
   const [error, setError]             = useState("");
   const fileInputRef                  = useRef(null);
@@ -227,7 +251,9 @@ export default function ComposeModal({ onClose, onSend, initialDraft }) {
         isNewMessage: !initialDraft?.threadId,
         currentSubject: subject,
       });
-      if (data.subject && (!subject || !initialDraft?.threadId)) setSubject(data.subject);
+      if (data.subject && (!subject || !initialDraft?.threadId) && isActualSubjectValue(data.subject, data.body, initialDraft?.body)) {
+        setSubject(data.subject.trim());
+      }
       if (data.body) setBody(data.body);
       setAiAssisted(true);
       setShowAssist(false);
@@ -287,8 +313,26 @@ export default function ComposeModal({ onClose, onSend, initialDraft }) {
       attachments,
       threadId: initialDraft?.threadId,
       inReplyTo: initialDraft?.inReplyTo,
+      lockedRecipient: Boolean(initialDraft?.lockedRecipient),
+      draftId: draftIdRef.current,
     };
     onSend(payload, draftData);
+    onClose();
+  };
+
+  // Closing without sending keeps whatever was typed in the Drafts folder.
+  const handleDiscard = () => {
+    if (onSaveDraft && (body.trim() || subject.trim())) {
+      onSaveDraft({
+        id: draftIdRef.current,
+        to: recipients.map((r) => r.email_address).join(", "),
+        subject,
+        text: body,
+        threadId: initialDraft?.threadId,
+        inReplyTo: initialDraft?.inReplyTo,
+        lockedRecipient: Boolean(initialDraft?.lockedRecipient),
+      });
+    }
     onClose();
   };
 
@@ -298,37 +342,53 @@ export default function ComposeModal({ onClose, onSend, initialDraft }) {
 
   return (
     <div
-      className="formal-overlay-backdrop"
-      onClick={onClose}
+      className={`formal-overlay-backdrop${closing ? " closing" : ""}`}
+      onClick={handleDiscard}
       style={{
-        position: "absolute",
+        position: fixed ? "fixed" : "absolute",
         inset: 0,
-        background: "rgba(15, 23, 42, 0.55)",
+        background: "var(--scrim)",
         backdropFilter: "blur(4px)",
         WebkitBackdropFilter: "blur(4px)",
         display: "flex",
-        alignItems: "center",
+        alignItems: isMobile ? "flex-end" : "center",
         justifyContent: "center",
-        padding: 24,
-        zIndex: 1000,
+        padding: isMobile ? 0 : 24,
+        zIndex: 1100,
       }}
     >
       <div
-        className="formal-overlay-card"
+        className={`formal-overlay-card${closing ? " closing" : ""}`}
         onClick={(e) => e.stopPropagation()}
         style={{
           width: "100%",
-          maxWidth: 680,
-          maxHeight: "92%",
-          background: colors.surface,
-          borderRadius: 16,
+          maxWidth: isMobile ? "100%" : 680,
+          maxHeight: isMobile ? "92dvh" : "92%",
+          background: "var(--surface)",
+          borderRadius: isMobile ? "var(--r-xl) var(--r-xl) 0 0" : "var(--r-xl)",
           border: `1px solid ${colors.borderStrong}`,
-          boxShadow: "0 20px 50px rgba(0, 0, 0, 0.35)",
+          boxShadow: "var(--shadow-sm)",
           display: "flex",
           flexDirection: "column",
-          overflow: "hidden",
+          overflowY: "auto",
+          overflowX: "hidden",
+          margin: 0,
+          paddingBottom: isMobile ? "calc(16px + env(safe-area-inset-bottom, 0px))" : 0,
         }}
       >
+        {isMobile && (
+          <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 4px", flexShrink: 0 }}>
+            <div
+              aria-hidden="true"
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: 999,
+                background: "var(--border-strong)",
+              }}
+            />
+          </div>
+        )}
         {/* Header */}
         <div
           style={{
@@ -346,7 +406,7 @@ export default function ComposeModal({ onClose, onSend, initialDraft }) {
           <button
             type="button"
             className="icon-btn icon-btn-danger"
-            onClick={onClose}
+            onClick={handleDiscard}
             style={{
               border: "none",
               background: "none",
@@ -364,7 +424,7 @@ export default function ComposeModal({ onClose, onSend, initialDraft }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: 1, overflowY: "auto" }}>
+        <form onSubmit={handleSubmit} className="chat-scroll-container" style={{ display: "flex", flexDirection: "column", flex: 1, overflowY: "auto" }}>
           {/* Recipient Chips Container */}
           <div
             style={{
@@ -483,7 +543,7 @@ export default function ComposeModal({ onClose, onSend, initialDraft }) {
                   background: colors.surface,
                   border: `1px solid ${colors.borderStrong}`,
                   borderRadius: 8,
-                  boxShadow: "0 8px 24px rgba(0, 0, 0, 0.25)",
+                  boxShadow: "var(--shadow-sm)",
                   zIndex: 3000,
                   overflow: "hidden",
                 }}
@@ -563,7 +623,7 @@ export default function ComposeModal({ onClose, onSend, initialDraft }) {
                   display: "inline-flex", alignItems: "center", gap: 4,
                 }}
                 onClick={() => { if (body.trim() && !showAssist) handleGenerateAssist(body); else { setShowAssist((p) => !p); setAssistError(""); } }}
-                title={body.trim() ? "Draft polite version of my note" : "AI-assisted draft generator"}
+                title={body.trim() ? "Draft polite version of my note" : "Writing assistant — drafts a message for you to edit"}
                 disabled={assisting}
               >
                 <Sparkles size={13} strokeWidth={2} />
@@ -602,7 +662,7 @@ export default function ComposeModal({ onClose, onSend, initialDraft }) {
                     disabled={assisting}
                   />
                   <button type="button"
-                    style={{ background: colors.accent, color: "#fff", border: "none", borderRadius: 14, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
+                    style={{ background: colors.accent, color: "var(--on-primary)", border: "none", borderRadius: 14, padding: "5px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}
                     onClick={() => handleGenerateAssist(assistCustomIntent || body)}
                     disabled={assisting || (!assistCustomIntent.trim() && !body.trim())}
                   >{assisting ? t("drafting") : "Draft"}</button>
@@ -614,6 +674,9 @@ export default function ComposeModal({ onClose, onSend, initialDraft }) {
 
           <textarea style={textareaStyle} placeholder={t("messagePlaceholder")} value={body} onChange={(e) => setBody(e.target.value)} />
 
+          {/* Bracket placeholder resolver pills */}
+          <PlaceholderResolverBar text={body} onChange={setBody} />
+
           {/* Listening banner */}
           {isListening && (
             <div style={{ display: "flex", alignItems: "center", gap: 10, background: colors.dangerBg, borderTop: `1px solid ${colors.danger}`, borderBottom: `1px solid ${colors.danger}`, padding: "8px 16px" }}>
@@ -621,7 +684,7 @@ export default function ComposeModal({ onClose, onSend, initialDraft }) {
               <span style={{ fontSize: 13, color: colors.danger, flex: 1 }}>
                 Listening in <strong>{VOICE_LANGUAGES.find((l) => l.code === voiceLang)?.name || "English"}</strong>… (transcribing live, edit anytime)
               </span>
-              <button type="button" style={{ background: colors.danger, color: "#fff", border: "none", borderRadius: 14, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }} onClick={handleVoiceToggle}>
+              <button type="button" style={{ background: colors.danger, color: "var(--on-primary)", border: "none", borderRadius: 14, padding: "4px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }} onClick={handleVoiceToggle}>
                 <MicOff size={13} strokeWidth={2} /> Stop
               </button>
             </div>
@@ -647,7 +710,7 @@ export default function ComposeModal({ onClose, onSend, initialDraft }) {
           {/* Footer */}
           <div style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: `1px solid ${colors.border}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <button type="submit" style={{ background: colors.accent, color: "#fff", border: "none", borderRadius: 20, padding: "8px 24px", cursor: "pointer", fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }} disabled={uploading}>
+              <button type="submit" style={{ background: colors.accent, color: "var(--on-primary)", border: "none", borderRadius: 20, padding: "8px 24px", cursor: "pointer", fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }} disabled={uploading}>
                 <Send size={14} strokeWidth={2} />
                 {t("send")}
               </button>
@@ -665,7 +728,7 @@ export default function ComposeModal({ onClose, onSend, initialDraft }) {
               <button type="button"
                 style={{
                   background:  isListening ? colors.danger       : colors.surfaceAlt,
-                  color:       isListening ? "#fff"              : colors.textPrimary,
+                  color:       isListening ? "var(--on-primary)"              : colors.textPrimary,
                   border:      `1px solid ${isListening ? colors.danger : colors.borderStrong}`,
                   borderRadius: 20, padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: isListening ? 600 : 500,
                   display: "flex", alignItems: "center", gap: 4,

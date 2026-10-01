@@ -1,0 +1,62 @@
+{
+  "login-desktop.png": {
+    "sha256": "01e23c9a7bdd99ba84d6911aaf07586bb38ae88fba93562fd46f53a28c1b3d0d",
+    "bytes": 1559755,
+    "width": 1672,
+    "height": 941
+  },
+  "login-mobile.png": {
+    "sha256": "d7e780cdf6d0ebb5b4adb0643c208c5dea841b509e8db939959c2b5f1d79e5b9",
+    "bytes": 1583957,
+    "width": 941,
+    "height": 1672
+  },
+  "error-desktop.png": {
+    "sha256": "9ed5e0c899319816d936b2414ec4c2f10382d57dbe0188caf92275fe0491cc66",
+    "bytes": 1646631,
+    "width": 1672,
+    "height": 940
+  },
+  "error-mobile.png": {
+    "sha256": "0090cf4ea80b0a36558895a547e1d8e7ad32704abf053149b2e1719f71f43982",
+    "bytes": 1783064,
+    "width": 940,
+    "height": 1672
+  },
+  "avatar-boy.png": {
+    "sha256": "7e35785cf0799b60d6174f4e3bb0e53a4ff6b2b0db7743817d466a8480f11f17",
+    "bytes": 986350,
+    "width": 1254,
+    "height": 1254
+  },
+  "avatar-girl.png": {
+    "sha256": "58b51e55fafb7ea3e2668594e96ffe12a9b2acd2e0e45ba18783cb32e4184ab0",
+    "bytes": 1014049,
+    "width": 1254,
+    "height": 1254
+  },
+  "wallpaper-doodle-dark.png": {
+    "sha256": "50def8ddec2e68f60d1e25fddb9f5d29dc7af6347009b59a1605c5ec8c36b9a3",
+    "bytes": 2756291,
+    "width": 2560,
+    "height": 1440
+  },
+  "wallpaper-doodle-light.png": {
+    "sha256": "407b5990c7516e9c7fe7e8b5e38e369861c3ce1d78d315391ef037c3f023fb11",
+    "bytes": 3066352,
+    "width": 2560,
+    "height": 1440
+  },
+  "logo-mark-dark.png": {
+    "sha256": "8aa8082ee0cff4ec666980b6f29060016f6902f641bf9db8d11b37aef40e8231",
+    "bytes": 356183,
+    "width": 1254,
+    "height": 1254
+  },
+  "logo-mark.png": {
+    "sha256": "48da9e15d15274b137e576e1e79f9c54cb4a31f941023c9def26e5efa74c104c",
+    "bytes": 349151,
+    "width": 1254,
+    "height": 1254
+  }
+}

@@ -1,5 +1,6 @@
 import https from "node:https";
 import http from "node:http";
+import { translateFree } from "./translateService.js";
 
 // ── Rate limiter: 15 requests per 60 seconds per user ────────────────────────
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
@@ -79,8 +80,9 @@ function generateFallbackDraft({ intent, threadMessages, isNewMessage, currentSu
     subject = `Re: ${subject}`;
   }
 
-  // Determine recipient salutation from thread history
+  // Determine recipient salutation and extract reference context from thread history
   let salutation = "Dear Sir/Madam,";
+  let referencedContext = "";
   if (threadMessages && threadMessages.length > 0) {
     const lastIncoming = [...threadMessages].reverse().find((m) => m.from_address);
     if (lastIncoming) {
@@ -89,6 +91,25 @@ function generateFallbackDraft({ intent, threadMessages, isNewMessage, currentSu
         const capitalized = namePart.split(/\s+/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
         salutation = `Dear ${capitalized},`;
       }
+
+      // Extract subject and/or first ~15 words of body_text
+      const cleanSub = (lastIncoming.subject || "").replace(/^re:\s*/i, "").trim().replace(/"/g, "'");
+      const hasSub = cleanSub && cleanSub.toLowerCase() !== "(no subject)";
+
+      let snippet = "";
+      if (lastIncoming.body_text && lastIncoming.body_text.trim()) {
+        const words = lastIncoming.body_text.trim().split(/\s+/);
+        snippet = words.slice(0, 15).join(" ").replace(/"/g, "'");
+        if (words.length > 15) snippet += "…";
+      }
+
+      if (hasSub && snippet) {
+        referencedContext = `"${cleanSub}" ("${snippet}")`;
+      } else if (hasSub) {
+        referencedContext = `"${cleanSub}"`;
+      } else if (snippet) {
+        referencedContext = `"${snippet}"`;
+      }
     }
   }
 
@@ -96,19 +117,26 @@ function generateFallbackDraft({ intent, threadMessages, isNewMessage, currentSu
   let bodyParagraph = "";
   if (lowerIntent.includes("appointment") || lowerIntent.includes("book") || lowerIntent.includes("schedule")) {
     bodyParagraph =
-      "I am writing to inquire about scheduling an appointment. " +
+      (referencedContext
+        ? `Regarding your message about ${referencedContext}, I am writing to inquire about scheduling an appointment. `
+        : "I am writing to inquire about scheduling an appointment. ") +
       "I would appreciate it if you could confirm your available time slots on [Insert Preferred Date, e.g. next Tuesday] or [Insert Alternative Date]. " +
       "If there are any documents or details needed prior to the meeting, please let me know.";
   } else if (lowerIntent.includes("follow up") || lowerIntent.includes("status") || lowerIntent.includes("update")) {
     bodyParagraph =
-      "I hope this message finds you well. I am writing to politely follow up on our previous correspondence regarding [Insert Reference Number or Topic]. " +
+      "I hope this message finds you well. " +
+      (referencedContext
+        ? `Regarding your message about ${referencedContext}, I am writing to politely follow up on the status regarding [Insert Reference Number or Topic]. `
+        : "I am writing to politely follow up on our previous correspondence regarding [Insert Reference Number or Topic]. ") +
       "Could you kindly provide an update on the current status at your earliest convenience?";
   } else if (lowerIntent.includes("question") || lowerIntent.includes("ask")) {
     bodyParagraph =
+      (referencedContext ? `Regarding your message about ${referencedContext}, ` : "") +
       `I am writing to respectfully inquire regarding ${rawIntent ? `"${rawIntent}"` : "the matter discussed"}. ` +
       "Could you please provide clarification or further details regarding [Insert Specific Question / Details]?";
   } else if (lowerIntent.includes("request") || lowerIntent.includes("need")) {
     bodyParagraph =
+      (referencedContext ? `Regarding your message about ${referencedContext}, ` : "") +
       `I am writing to formally request assistance with ${rawIntent ? `"${rawIntent}"` : "the matter at hand"}. ` +
       "Please advise if any reference details such as [Insert Account / Reference Number] are required to process this.";
   } else {
@@ -117,6 +145,7 @@ function generateFallbackDraft({ intent, threadMessages, isNewMessage, currentSu
       ? rawIntent.charAt(0).toUpperCase() + rawIntent.slice(1)
       : "I am writing to follow up on this matter";
     bodyParagraph =
+      (referencedContext ? `Regarding your message about ${referencedContext}, ` : "") +
       `I am writing regarding the following: ${cleanedIntent}. ` +
       "Kindly let me know if you require any additional information from my side (such as [Insert Date / Reference Number if applicable]).";
   }
@@ -134,6 +163,7 @@ async function callLLMApi({ prompt, systemInstruction }) {
   const openAiKey = process.env.OPENAI_API_KEY;
 
   if (geminiKey) {
+    const models = [process.env.GEMINI_MODEL, "gemini-flash-latest", "gemini-2.5-flash"].filter(Boolean);
     const postData = JSON.stringify({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -143,38 +173,53 @@ async function callLLMApi({ prompt, systemInstruction }) {
       },
     });
 
-    const options = {
-      hostname: "generativelanguage.googleapis.com",
-      path: `/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(postData),
-      },
-    };
-
-    return new Promise((resolve, reject) => {
-      const req = https.request(options, (res) => {
-        let data = "";
-        res.on("data", (chunk) => (data += chunk));
-        res.on("end", () => {
-          try {
-            const parsed = JSON.parse(data);
-            const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) {
-              resolve(JSON.parse(text));
-            } else {
-              reject(new Error("No valid response from Gemini"));
-            }
-          } catch (e) {
-            reject(e);
+    const callModel = (model) =>
+      new Promise((resolve, reject) => {
+        const req = https.request(
+          {
+            hostname: "generativelanguage.googleapis.com",
+            path: `/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Content-Length": Buffer.byteLength(postData),
+            },
+          },
+          (res) => {
+            let data = "";
+            res.on("data", (chunk) => (data += chunk));
+            res.on("end", () => {
+              try {
+                const parsed = JSON.parse(data);
+                const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (text) {
+                  const jsonMatch = text.match(/\{[\s\S]*\}/);
+                  resolve(JSON.parse(jsonMatch ? jsonMatch[0] : text));
+                } else {
+                  reject(new Error(`No valid response from Gemini (${model}): ${parsed?.error?.message || res.statusCode}`));
+                }
+              } catch (e) {
+                reject(e);
+              }
+            });
           }
-        });
+        );
+        req.setTimeout(12000, () => req.destroy(new Error(`Gemini ${model} timed out`)));
+        req.on("error", reject);
+        req.write(postData);
+        req.end();
       });
-      req.on("error", reject);
-      req.write(postData);
-      req.end();
-    });
+
+    // Older model names get retired; try the next one instead of failing outright.
+    let lastErr = null;
+    for (const model of models) {
+      try {
+        return await callModel(model);
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw lastErr || new Error("Gemini call failed");
   }
 
   if (openAiKey) {
@@ -217,6 +262,7 @@ async function callLLMApi({ prompt, systemInstruction }) {
           }
         });
       });
+      req.setTimeout(12000, () => req.destroy(new Error("OpenAI request timed out")));
       req.on("error", reject);
       req.write(postData);
       req.end();
@@ -311,4 +357,168 @@ Generate the assisted draft JSON:`;
     body: fallback.body,
     cached: !!cachedSubject,
   };
+}
+
+// ── Translation Service ─────────────────────────────────────────────────────
+const LANG_MAP = {
+  en: "English",
+  hi: "Hindi",
+  ta: "Tamil",
+  te: "Telugu",
+  bn: "Bengali",
+  mr: "Marathi",
+  pa: "Punjabi",
+  gu: "Gujarati",
+};
+
+const COMMON_TRANSLATIONS = {
+  "hello": {
+    en: "Hello",
+    hi: "नमस्ते",
+    ta: "வணக்கம்",
+    te: "నమస్కారం",
+    bn: "নমস্কার",
+    mr: "नमस्कार",
+    pa: "ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ",
+    gu: "નમસ્તે",
+  },
+  "hi": {
+    en: "Hi",
+    hi: "नमस्ते",
+    ta: "வணக்கம்",
+    te: "నమస్కారం",
+    bn: "নমস্কার",
+    mr: "नमस्कार",
+    pa: "ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ",
+    gu: "નમસ્તે",
+  },
+  "hey": {
+    en: "Hey",
+    hi: "नमस्ते",
+    ta: "வணக்கம்",
+    te: "నమస్కారం",
+    bn: "নমস্কার",
+    mr: "नमस्कार",
+    pa: "ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ",
+    gu: "નમસ્તે",
+  },
+  "how are you": {
+    en: "How are you?",
+    hi: "आप कैसे हैं?",
+    ta: "நீங்கள் எப்படி இருக்கிறீர்கள்?",
+    te: "మీరు ఎలా ఉన్నారు?",
+    bn: "আপনি কেমন আছেন?",
+    mr: "तुम्ही कसे आहात?",
+    pa: "ਤੁਸੀਂ ਕਿਵੇਂ ਹੋ?",
+    gu: "તમે કેમ છો?",
+  },
+  "how are you?": {
+    en: "How are you?",
+    hi: "आप कैसे हैं?",
+    ta: "நீங்கள் எப்படி இருக்கிறீர்கள்?",
+    te: "మీరు ఎలా ఉన్నారు?",
+    bn: "আপনি কেমন আছেন?",
+    mr: "तुम्ही कसे आहात?",
+    pa: "ਤੁਸੀਂ ਕਿਵੇਂ ਹੋ?",
+    gu: "તમે કેમ છો?",
+  },
+  "good morning": {
+    en: "Good morning",
+    hi: "शुभ प्रभात",
+    ta: "காலை வணக்கம்",
+    te: "శుభోదయం",
+    bn: "শুভ সকাল",
+    mr: "शुभ प्रभात",
+    pa: "ਸ਼ੁਭ ਸਵੇਰ",
+    gu: "સુપ્રભાત",
+  },
+  "thank you": {
+    en: "Thank you",
+    hi: "धन्यवाद",
+    ta: "நன்றி",
+    te: "ధన్యవాదాలు",
+    bn: "ধন্যবাদ",
+    mr: "धन्यवाद",
+    pa: "ਧੰਨਵਾਦ",
+    gu: "આભાર",
+  },
+  "thanks": {
+    en: "Thanks",
+    hi: "धन्यवाद",
+    ta: "நன்றி",
+    te: "ధన్యవాదాలు",
+    bn: "ধন্যবাদ",
+    mr: "धन्यवाद",
+    pa: "ਧੰਨਵਾਦ",
+    gu: "આભાર",
+  },
+  "welcome to phonemail": {
+    en: "Welcome to PhoneMail",
+    hi: "फ़ोनमेल में आपका स्वागत है",
+    ta: "போன்மெயிலுக்கு நல்வரவு",
+    te: "ఫోన్‌మెయిల్‌కు స్వాగతం",
+    bn: "ফোনমেইলে স্বাগতম",
+    mr: "फोनमेलमध्ये आपले स्वागत आहे",
+    pa: "ਫ਼ੋਨਮੇਲ ਵਿੱਚ ਤੁਹਾਡਾ ਸੁਆਗਤ ਹੈ",
+    gu: "ફોનમેઇલમાં આપનું સ્વાગત છે",
+  },
+  "meeting at 4pm": {
+    en: "Meeting at 4 PM",
+    hi: "शाम 4 बजे बैठक",
+    ta: "மாலை 4 மணிக்கு சந்திப்பு",
+    te: "సాయంత్రం 4 గంటలకు సమావేశం",
+    bn: "বিকেল ৪টায় মিটিং",
+    mr: "संध्याकाळी ४ वाजता बैठक",
+    pa: "ਸ਼ਾਮ 4 ਵਜੇ ਮੀਟਿੰਗ",
+    gu: "સાંજે 4 વાગ્યે મીટિંગ",
+  },
+};
+
+const NATIVE_PREFIXES = {
+  ta: "வணக்கம், செய்தி: ",
+  te: "నమస్కారం, సందేశం: ",
+  bn: "নমস্কার, বার্তা: ",
+  hi: "नमस्ते, संदेश: ",
+  mr: "नमस्कार, संदेश: ",
+  pa: "ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ, ਸੁਨੇਹਾ: ",
+  gu: "નમસ્તે, સંદેશ: ",
+  en: "Hello, message: ",
+};
+
+export async function translateMessageText({ text, targetLangCode = "en" }) {
+  const normCode = (targetLangCode || "en").toLowerCase().split("-")[0];
+  const targetLangName = LANG_MAP[normCode] || targetLangCode;
+
+  // 1. Tiny built-in dictionary for very common short phrases.
+  const normalizedKey = text.toLowerCase().replace(/[^\w\s]/g, "").trim();
+  if (COMMON_TRANSLATIONS[normalizedKey]?.[normCode]) {
+    return { translatedText: COMMON_TRANSLATIONS[normalizedKey][normCode], targetLangCode: normCode };
+  }
+
+  // 2. If an LLM key is configured, it gives the most natural result.
+  if (process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY) {
+    const systemInstruction = `You are a professional language translator.
+Translate the user message accurately, naturally, and fluently into ${targetLangName}.
+CRITICAL RULES:
+1. Retain the exact tone, meaning, line breaks and intent of the original text.
+2. Keep names, email addresses, phone numbers, and URLs intact.
+3. You MUST respond ONLY with a valid JSON object in this format:
+{
+  "translatedText": "translated text here"
+}`;
+    const prompt = `Translate this message into ${targetLangName}:\n"""\n${text}\n"""\n\nReturn JSON:`;
+    try {
+      const llmResult = await callLLMApi({ prompt, systemInstruction });
+      const translated = llmResult?.translatedText || llmResult?.text || llmResult?.translation;
+      if (translated && typeof translated === "string" && translated.trim()) {
+        return { translatedText: translated.trim(), targetLangCode: normCode };
+      }
+    } catch (err) {
+      console.warn("[translate] LLM call failed, using free providers:", err.message);
+    }
+  }
+
+  // 3. Free providers (no key needed). Throws TRANSLATION_UNAVAILABLE if all fail.
+  const free = await translateFree(text, normCode);
+  return { translatedText: free.translatedText, unchanged: !!free.unchanged, targetLangCode: normCode };
 }

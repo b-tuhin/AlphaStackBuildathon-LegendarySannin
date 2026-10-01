@@ -1,11 +1,13 @@
+import { EMAIL_DOMAIN, LEGACY_EMAIL_DOMAIN } from "../config/brand.js";
 // Spike Mail styled contact & sender legibility helpers
 
 export function formatPhoneNumber(input) {
   if (!input) return "";
   let str = String(input).trim();
-  // Strip phonemail.com domain if present
-  if (str.toLowerCase().endsWith("@phonemail.com")) {
-    str = str.slice(0, -("@phonemail.com".length));
+  // Strip our own (or the legacy) email domain if present
+  const ownSuffix = [EMAIL_DOMAIN, LEGACY_EMAIL_DOMAIN].map((d) => "@" + d).find((s) => str.toLowerCase().endsWith(s));
+  if (ownSuffix) {
+    str = str.slice(0, -ownSuffix.length);
   }
   // If it still contains @, it's an external email
   if (str.includes("@")) {
@@ -59,25 +61,10 @@ export function getAvatarInitials(nameOrAddress, isGroup = false) {
   return match ? match[0].toUpperCase() : str.charAt(0).toUpperCase();
 }
 
-const AVATAR_PALETTE = [
-  "#2563EB", // Royal Blue
-  "#7C3AED", // Purple
-  "#059669", // Emerald
-  "#D97706", // Amber
-  "#DC2626", // Red
-  "#0891B2", // Cyan
-  "#4F46E5", // Indigo
-  "#0284C7", // Sky
-];
+export function getAvatarColor(_key) {
+  return "var(--avatar-bg)";
+}
 
-export function getAvatarColor(key) {
-  if (!key) return AVATAR_PALETTE[0];
-  const str = String(key);
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i);
-    hash |= 0;
-  }
-  const index = Math.abs(hash) % AVATAR_PALETTE.length;
-  return AVATAR_PALETTE[index];
+export function getAvatarTextColor(_key) {
+  return "var(--avatar-fg)";
 }

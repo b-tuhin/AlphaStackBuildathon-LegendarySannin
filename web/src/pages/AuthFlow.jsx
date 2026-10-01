@@ -1,47 +1,52 @@
+import { EMAIL_DOMAIN } from "../config/brand.js";
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { login, registerAccount, setToken, acceptTos } from "../api/client.js";
+import { login, registerAccount, startPhoneOtp, checkPhoneOtp, setToken } from "../api/client.js";
 import { useTheme } from "../theme/ThemeContext.jsx";
+import { useI18n } from "../i18n/I18nContext.jsx";
+import { APP_NAME } from "../config/brand.js";
+import { getAsset } from "../config/assets.js";
+import Logo from "../components/Logo.jsx";
+import AuthLanguageMenu from "../components/AuthLanguageMenu.jsx";
+import TermsDialog from "../components/TermsDialog.jsx";
 import PasswordField from "../components/PasswordField.jsx";
 import StrengthMeter from "../components/StrengthMeter.jsx";
 import ChangePassword from "./ChangePassword.jsx";
 import ThemedCheckbox from "../components/ThemedCheckbox.jsx";
+import { AlertCircle, Check, Globe } from "lucide-react";
 
-const LANGUAGES = [
-  { code: "en", label: "English" },
-  { code: "hi", label: "हिन्दी" },
-  { code: "ta", label: "தமிழ்" },
-  { code: "te", label: "తెలుగు" },
-  { code: "bn", label: "বাংলা" },
-  { code: "mr", label: "मराठी" },
-  { code: "pa", label: "ਪੰਜਾਬੀ" },
-  { code: "gu", label: "ગુજરાતી" },
-];
+const cleanPhone = (raw) => {
+  let d = String(raw || "").replace(/\D/g, "");
+  if (d.length === 12 && d.startsWith("91")) d = d.slice(2);
+  else if (d.length === 11 && d.startsWith("0")) d = d.slice(1);
+  return d.slice(0, 10);
+};
 
 export default function AuthFlow({ initialMode = "login" }) {
   const { colors } = useTheme();
+  const { lang, setLang, supportedLanguages, t } = useI18n();
   const navigate = useNavigate();
 
-  // Steps: 1: Language -> 2: Terms -> 3: Phone -> 4: Password
-  const [step, setStep] = useState(1);
+  // Login goes directly to phone/password. Signup uses phone -> SMS code -> password.
+  const [step, setStep] = useState(3);
   const [mode, setMode] = useState(initialMode); // "login" | "register"
-
-  // Language state
-  const [selectedLang, setSelectedLang] = useState(() => {
-    return localStorage.getItem("phonemail_lang") || "English";
-  });
 
   // Terms state
   const [termsAgreed, setTermsAgreed] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
 
   // Phone state (prefill from session where possible)
   const [phone, setPhone] = useState(() => {
-    return sessionStorage.getItem("phonemail_typed_phone") || "";
+    return cleanPhone(sessionStorage.getItem("phonemail_typed_phone") || "");
   });
 
   // Password states
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [signupGrant, setSignupGrant] = useState("");
+  const [phoneOtpRequired, setPhoneOtpRequired] = useState(true);
+  const [resendSeconds, setResendSeconds] = useState(0);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [forceChange, setForceChange] = useState(false);
@@ -50,450 +55,668 @@ export default function AuthFlow({ initialMode = "login" }) {
     sessionStorage.setItem("phonemail_typed_phone", phone);
   }, [phone]);
 
-  const handleSelectLang = (langLabel) => {
-    setSelectedLang(langLabel);
-    try {
-      localStorage.setItem("phonemail_lang", langLabel);
-    } catch {}
-  };
-
-  const handlePhoneSubmit = (e) => {
+  const handlePhoneSubmit = async (e) => {
     e?.preventDefault();
     setError("");
     const digits = phone.replace(/[^\d]/g, "");
-    if (digits.length < 7) {
-      setError("Please enter a valid phone number (at least 7 digits).");
+    if (!/^[6-9]\d{9}$/.test(digits)) {
+      setError(t("phoneInvalid"));
       return;
     }
-    setStep(4);
+    if (mode === "register") {
+      setLoading(true);
+      try {
+        const { data } = await startPhoneOtp(phone, "signup");
+        setOtpCode("");
+        setSignupGrant("");
+        setPhoneOtpRequired(data.mode !== "password");
+        if (data.mode === "password") setStep(5);
+        else { setResendSeconds(60); setStep(4); }
+      } catch (err) {
+        setError(err?.response?.data?.error || err.message || "Unable to send verification code.");
+      } finally { setLoading(false); }
+    } else {
+      setStep(4);
+    }
   };
+
+  const handleOtpSubmit = async (e) => {
+    e?.preventDefault();
+    setError("");
+    if (!/^\d{4,10}$/.test(otpCode)) { setError("Enter the verification code sent by SMS."); return; }
+    setLoading(true);
+    try {
+      const { data } = await checkPhoneOtp(phone, otpCode, "signup");
+      if (!data.signupGrant) throw new Error("Phone verification did not return a signup grant.");
+      setSignupGrant(data.signupGrant);
+      setOtpCode("");
+      setStep(5);
+    } catch (err) {
+      setError(err?.response?.data?.error || err.message || "Invalid or expired verification code.");
+    } finally { setLoading(false); }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendSeconds > 0 || loading) return;
+    setLoading(true);
+    try {
+      const { data } = await startPhoneOtp(phone, "signup");
+      if (data.mode === "password") { setPhoneOtpRequired(false); setStep(5); return; }
+      setResendSeconds(60); setOtpCode("");
+    }
+    catch (err) { setError(err?.response?.data?.error || err.message || "Unable to resend code."); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => {
+    if (resendSeconds <= 0) return undefined;
+    const timer = setTimeout(() => setResendSeconds((value) => Math.max(0, value - 1)), 1000);
+    return () => clearTimeout(timer);
+  }, [resendSeconds]);
 
   const handleAuthSubmit = async (e) => {
     e?.preventDefault();
     setError("");
-    const digits = phone.replace(/[^\d]/g, "");
-
     if (mode === "register") {
-      if (password.length < 8) {
-        setError("Password must be at least 8 characters.");
-        return;
-      }
-      if (password !== confirmPassword) {
-        setError("Passwords do not match.");
-        return;
-      }
+      if (phoneOtpRequired && !signupGrant) { setError("Verify your phone number first."); return; }
+      if (password.length < 8) { setError("Password must be at least 8 characters."); return; }
+      if (password !== confirmPassword) { setError("Passwords do not match."); return; }
     }
-
     setLoading(true);
     try {
       if (mode === "register") {
-        const { data } = await registerAccount(digits, password, confirmPassword, true);
+        const { data } = await registerAccount(phone, password, confirmPassword, true, signupGrant);
         setToken(data.token);
-        await acceptTos().catch(() => {});
+        sessionStorage.removeItem("phonemail_typed_phone");
+        setPhone(""); setPassword(""); setConfirmPassword(""); setOtpCode(""); setSignupGrant("");
         if (data.mustChangePassword) setForceChange(true);
         else navigate("/");
       } else {
-        const { data } = await login(digits, password);
+        const { data } = await login(phone, password);
         setToken(data.token);
         if (data.mustChangePassword) setForceChange(true);
         else navigate("/");
       }
     } catch (err) {
       setError(err?.response?.data?.error || err.message || "Authentication failed");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   if (forceChange) {
     return <ChangePassword onDone={() => navigate("/")} />;
   }
 
-  // Common card style
-  const cardStyle = {
-    width: "100%",
-    maxWidth: 460,
-    background: colors.surface,
-    border: `1px solid ${colors.border}`,
-    borderRadius: 16,
-    padding: 32,
-    boxShadow: "0 4px 20px rgba(0,0,0,0.06)",
-    color: colors.textPrimary,
-  };
-
-  const buttonStyle = {
-    width: "100%",
-    padding: "12px 20px",
-    background: colors.accent,
-    color: "#fff",
-    border: "none",
-    borderRadius: 24,
-    fontSize: 15,
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "background 0.2s ease",
-    marginTop: 16,
-  };
-
-  const secondaryBtnStyle = {
-    ...buttonStyle,
-    background: "none",
-    border: `1px solid ${colors.borderStrong}`,
-    color: colors.textPrimary,
-    marginTop: 8,
-  };
-
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: colors.bg,
-        padding: 20,
-      }}
-    >
-      <div style={cardStyle}>
-        {/* Step Indicator */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: colors.accent, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-            Step {step} of 4
-          </span>
-          <span style={{ fontSize: 13, color: colors.textSecondary }}>PhoneMail</span>
-        </div>
+    <div className="login-page-viewport">
+      {/* ── Full-Bleed Atmospheric Background Layer (Phase 2 Spec) ── */}
+      <div className="login-bg-layer" aria-hidden="true">
+        <picture className="login-bg-picture">
+          <source media="(max-width: 768px)" srcSet={getAsset("login-mobile").url} />
+          <img
+            src={getAsset("login-desktop").url}
+            alt=""
+            className="login-bg-img"
+            style={{ objectPosition: getAsset("login-desktop").objectPosition }}
+            loading="eager"
+            decoding="async"
+          />
+        </picture>
+      </div>
 
-        {error && (
+      {/* ── Content Container: Desktop form sits on RIGHT over the image ── */}
+      <div className="login-content-container">
+        <main className="login-card" id="main-content">
+          <div className="login-sheet-handle" aria-hidden="true" />
+          {/* Header & Step Indicator */}
+          <div className="auth-card-header">
+            <div className="auth-card-brand">
+              <Logo size={72} />
+              <span className="auth-card-brand-name">{APP_NAME}</span>
+            </div>
+
+            <AuthLanguageMenu />
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: "var(--link)", background: "var(--primary-tint)",
+                padding: "3px 9px",
+                borderRadius: 12,
+                letterSpacing: "0.3px",
+              }}
+            >
+              Step {step === 3 ? 1 : step === 4 ? 2 : 3} of {mode === "register" ? 3 : 2}
+            </span>
+          </div>
+
+          {/* Progress Bar */}
           <div
             style={{
-              padding: "10px 14px",
-              background: colors.dangerBg,
-              color: colors.danger,
-              borderRadius: 8,
-              fontSize: 13,
-              marginBottom: 16,
+              height: 4,
+              background: "var(--raised)",
+              borderRadius: 2,
+              marginBottom: 20,
+              overflow: "hidden",
             }}
           >
-            {error}
+            <div
+              style={{
+                width: `${(step === 3 ? 33 : step === 4 ? 66 : 100)}%`,
+                height: "100%",
+                background: "var(--primary)", borderRadius: 2, transition: "width 240ms ease",
+              }}
+            />
           </div>
-        )}
 
-        {/* ── STEP 1: Language Selection ────────────────────────────────────── */}
-        {step === 1 && (
-          <div>
-            <div style={{ textAlign: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 36, marginBottom: 8 }}>🌐</div>
-              <h2 style={{ margin: "0 0 6px 0", fontSize: 20, color: colors.textPrimary }}>Choose your language</h2>
-              <p style={{ margin: 0, fontSize: 13, color: colors.textSecondary }}>
-                Select your preferred language. You can change this later in Settings.
-              </p>
+          {/* Error Banner with standard alert semantics */}
+          {error && (
+            <div
+              role="alert"
+              aria-live="assertive"
+              className="pm-alert pm-alert--error" style={{ marginBottom: 18, borderRadius: "var(--r-md)", fontSize: 13, background: "var(--danger-bg)", color: "var(--danger)", border: "1px solid var(--danger)" }}
+            >
+              <AlertCircle size={18} strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>{error}</span>
             </div>
+          )}
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 280, overflowY: "auto", margin: "16px 0", paddingRight: 4 }}>
-              {LANGUAGES.map((l) => {
-                const isSelected = selectedLang === l.label;
-                return (
-                  <button
-                    key={l.code}
-                    type="button"
-                    onClick={() => handleSelectLang(l.label)}
+          <div key={step} className="auth-step-anim">
+            {/* ── STEP 1: Language Selection ────────────────────────────────────── */}
+            {step === 1 && (
+              <div>
+                <div style={{ textAlign: "center", marginBottom: 20 }}>
+                  <div
+                    className="login-step-icon-circle"
                     style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: "50%",
+                      background: "var(--primary-tint)",
+                      color: "var(--link)",
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "12px 16px",
-                      background: isSelected ? colors.accentLight : colors.surfaceAlt,
-                      border: isSelected ? `2px solid ${colors.accent}` : `1px solid ${colors.border}`,
-                      borderRadius: 10,
-                      cursor: "pointer",
-                      textAlign: "left",
-                      color: isSelected ? colors.textAccent : colors.textPrimary,
-                      fontWeight: isSelected ? 700 : 500,
-                      fontSize: 15,
+                      justifyContent: "center",
+                      margin: "0 auto 10px auto",
                     }}
                   >
-                    <span>{l.label}</span>
-                    {isSelected && <span style={{ color: colors.accent, fontSize: 16 }}>✓</span>}
-                  </button>
-                );
-              })}
-            </div>
+                    <Globe size={24} strokeWidth={1.75} color="var(--link)" />
+                  </div>
+                  <h2 style={{ margin: "0 0 6px 0", fontSize: 20, fontWeight: 700, color: colors.textPrimary }}>
+                    {t("chooseLanguage") || "Choose your language"}
+                  </h2>
+                  <p style={{ margin: 0, fontSize: 13, color: colors.textSecondary }}>
+                    {t("chooseLanguageDesc") || "Select your preferred language. You can change this later in Settings."}
+                  </p>
+                </div>
 
-            <button type="button" style={buttonStyle} onClick={() => setStep(2)}>
-              Continue
-            </button>
-          </div>
-        )}
-
-        {/* ── STEP 2: Terms and Conditions (Blocking) ───────────────────────── */}
-        {step === 2 && (
-          <div>
-            <div style={{ marginBottom: 16 }}>
-              <h2 style={{ margin: "0 0 6px 0", fontSize: 20, color: colors.textPrimary }}>Terms &amp; Privacy Policy</h2>
-              <p style={{ margin: 0, fontSize: 13, color: colors.textSecondary }}>
-                Please review and accept the terms before continuing.
-              </p>
-            </div>
-
-            <div
-              style={{
-                maxHeight: 260,
-                overflowY: "auto",
-                background: colors.surfaceAlt,
-                border: `1px solid ${colors.border}`,
-                borderRadius: 8,
-                padding: 16,
-                fontSize: 13,
-                lineHeight: 1.6,
-                color: colors.textSecondary,
-                marginBottom: 16,
-              }}
-            >
-              <h4 style={{ margin: "0 0 4px 0", color: colors.textPrimary }}>What PhoneMail is</h4>
-              <p style={{ margin: "0 0 12px 0" }}>
-                PhoneMail provides an email address based directly on your phone number (&lt;yournumber&gt;@phonemail.com).
-              </p>
-
-              <h4 style={{ margin: "0 0 4px 0", color: colors.textPrimary }}>Your account</h4>
-              <p style={{ margin: "0 0 12px 0" }}>
-                You must be 13 or older to create an account. You are responsible for keeping your password secure.
-              </p>
-
-              <h4 style={{ margin: "0 0 4px 0", color: colors.textPrimary }}>Data we collect</h4>
-              <ul style={{ margin: "0 0 12px 0", paddingLeft: 18 }}>
-                <li>Phone number (your identity &amp; email address)</li>
-                <li>Password (stored as a secure bcrypt hash)</li>
-                <li>Email messages &amp; attachments (to power your inbox)</li>
-              </ul>
-
-              <h4 style={{ margin: "0 0 4px 0", color: colors.textPrimary }}>Privacy commitment</h4>
-              <p style={{ margin: "0 0 12px 0" }}>
-                We do not track your location, sell your data, or serve advertising.
-              </p>
-
-              <a
-                href="/terms.html"
-                target="_blank"
-                rel="noreferrer"
-                style={{ color: colors.accent, fontWeight: 600, textDecoration: "none" }}
-              >
-                Read full Terms of Service &amp; Privacy Policy ↗
-              </a>
-            </div>
-
-            <label
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 10,
-                fontSize: 13,
-                cursor: "pointer",
-                color: colors.textPrimary,
-                userSelect: "none",
-                marginBottom: 8,
-              }}
-            >
-              <ThemedCheckbox
-                checked={termsAgreed}
-                onChange={(val) => setTermsAgreed(val)}
-                size={18}
-                style={{ marginTop: 2 }}
-                ariaLabel="Agree to Terms of Service"
-              />
-              <span>
-                I agree to PhoneMail's{" "}
-                <a href="/terms.html" target="_blank" rel="noreferrer" style={{ color: colors.accent, fontWeight: 600 }}>
-                  Terms of Service &amp; Privacy Policy
-                </a>
-              </span>
-            </label>
-
-            <button
-              type="button"
-              disabled={!termsAgreed}
-              style={{
-                ...buttonStyle,
-                opacity: termsAgreed ? 1 : 0.45,
-                cursor: termsAgreed ? "pointer" : "not-allowed",
-              }}
-              onClick={() => setStep(3)}
-            >
-              Agree and continue
-            </button>
-
-            <button type="button" style={secondaryBtnStyle} onClick={() => setStep(1)}>
-              Back
-            </button>
-          </div>
-        )}
-
-        {/* ── STEP 3: Phone Number Input ───────────────────────────────────── */}
-        {step === 3 && (
-          <form onSubmit={handlePhoneSubmit}>
-            <div style={{ textAlign: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 36, marginBottom: 8 }}>📱</div>
-              <h2 style={{ margin: "0 0 6px 0", fontSize: 20, color: colors.textPrimary }}>Enter your phone number</h2>
-              <p style={{ margin: 0, fontSize: 13, color: colors.textSecondary }}>
-                This becomes your PhoneMail email address.
-              </p>
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: colors.textSecondary, marginBottom: 6, textTransform: "uppercase" }}>
-                Phone Number
-              </label>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  border: `1px solid ${colors.borderStrong}`,
-                  borderRadius: 10,
-                  background: colors.surface,
-                  padding: "0 14px",
-                  fontSize: 16,
-                }}
-              >
-                <span style={{ color: colors.textSecondary, marginRight: 8, fontWeight: 600 }}>+</span>
-                <input
-                  type="tel"
-                  placeholder="9876543210"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  autoFocus
-                  autoComplete="tel"
-                  style={{
-                    flex: 1,
-                    border: "none",
-                    outline: "none",
-                    padding: "12px 0",
-                    fontSize: 16,
-                    background: "transparent",
-                    color: colors.textPrimary,
+                <div
+                  className="chat-scroll-container language-scroll-area" style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 208,
+                    overflowY: "auto",
+                    margin: "18px 0",
+                    paddingRight: 4,
                   }}
-                />
+                >
+                  {supportedLanguages.map((l) => {
+                    const isSelected = lang === l.code;
+                    return (
+                      <button
+                        key={l.code}
+                        type="button"
+                        onClick={() => setLang(l.code)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          minHeight: 52, height: 52, padding: "0 16px", background: isSelected ? "var(--primary-tint)" : "var(--surface)", border: isSelected ? "2px solid var(--primary)" : "1px solid var(--border)",
+                          borderRadius: "var(--r-md)",
+                          cursor: "pointer",
+                          textAlign: "left",
+                          color: isSelected ? "var(--link)" : "var(--text)",
+                          fontWeight: isSelected ? 700 : 500,
+                          fontSize: 15,
+                          fontFamily: "var(--font-sans)",
+                          transition: "all 0.15s ease",
+                          boxSizing: "border-box",
+                        }}
+                      >
+                        <span>{l.label}</span>
+                        {isSelected && (
+                          <Check size={18} strokeWidth={2.5} color="var(--primary)" style={{ flexShrink: 0 }} />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => setStep(2)}
+                  style={{
+                    width: "100%",
+                    minHeight: 48,
+                    height: 48,
+                    background: "var(--primary)",
+                    color: "var(--on-primary)",
+                    borderRadius: "var(--r-md)",
+                    fontSize: 15,
+                    fontWeight: 600,
+                  }}
+                >
+                  {t("continue") || "Continue"}
+                </button>
               </div>
-              <p style={{ margin: "8px 0 0 0", fontSize: 12, color: colors.textSecondary }}>
-                Your address will be:{" "}
-                <strong style={{ color: colors.accent }}>
-                  {phone.replace(/[^\d]/g, "") || "..."}@phonemail.com
-                </strong>
-              </p>
-            </div>
+            )}
 
-            <button type="submit" style={buttonStyle}>
-              Next
-            </button>
+            {/* ── STEP 2: Terms and Conditions ─────────────────────────────────── */}
+            {step === 2 && (
+              <div>
+                <div style={{ marginBottom: 16 }}>
+                  <h2 style={{ margin: "0 0 6px 0", fontSize: 20, fontWeight: 700, color: colors.textPrimary }}>
+                    Terms &amp; Privacy Policy
+                  </h2>
+                  <p style={{ margin: 0, fontSize: 13, color: colors.textSecondary }}>
+                    Please review and accept our civic terms before continuing.
+                  </p>
+                </div>
 
-            <button type="button" style={secondaryBtnStyle} onClick={() => setStep(2)}>
-              Back
-            </button>
-          </form>
-        )}
+                <div
+                  className="chat-scroll-container"
+                  style={{
+                    maxHeight: 240,
+                    overflowY: "auto",
+                    background: "var(--c-surface-alt)",
+                    border: "1px solid var(--c-border)",
+                    borderRadius: "var(--r-md)",
+                    padding: 16,
+                    fontSize: 13,
+                    lineHeight: 1.6,
+                    color: colors.textSecondary,
+                    marginBottom: 16,
+                  }}
+                >
+                  <h4 style={{ margin: "0 0 4px 0", color: colors.textPrimary, fontSize: 13, fontWeight: 700 }}>
+                    What {APP_NAME} is
+                  </h4>
+                  <p style={{ margin: "0 0 12px 0" }}>
+                    {APP_NAME} provides an official civic email address based directly on your phone number (&lt;yournumber&gt;@{EMAIL_DOMAIN}).
+                  </p>
 
-        {/* ── STEP 4: Password Login / Creation ────────────────────────────── */}
-        {step === 4 && (
-          <form onSubmit={handleAuthSubmit}>
-            <div style={{ textAlign: "center", marginBottom: 16 }}>
-              <h2 style={{ margin: "0 0 6px 0", fontSize: 20, color: colors.textPrimary }}>
-                {mode === "register" ? "Create your password" : "Enter your password"}
-              </h2>
-              <p style={{ margin: 0, fontSize: 13, color: colors.textSecondary }}>
-                Account: <strong style={{ color: colors.textPrimary }}>{phone.replace(/[^\d]/g, "")}@phonemail.com</strong>
-              </p>
-            </div>
+                  <h4 style={{ margin: "0 0 4px 0", color: colors.textPrimary, fontSize: 13, fontWeight: 700 }}>
+                    Civic privacy commitment
+                  </h4>
+                  <p style={{ margin: "0 0 12px 0" }}>
+                    We do not track your location, sell your data, or serve advertising. Your communications remain secure and private.
+                  </p>
 
-            {/* Toggle Mode Tab (Sign In / Register) */}
-            <div
-              style={{
-                display: "flex",
-                background: colors.surfaceAlt,
-                borderRadius: 8,
-                padding: 3,
-                marginBottom: 20,
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => { setMode("login"); setError(""); }}
-                style={{
-                  flex: 1,
-                  padding: "8px 12px",
-                  borderRadius: 6,
-                  border: "none",
-                  background: mode === "login" ? colors.surface : "transparent",
-                  color: mode === "login" ? colors.textPrimary : colors.textSecondary,
-                  fontWeight: mode === "login" ? 700 : 500,
-                  cursor: "pointer",
-                  fontSize: 13,
-                  boxShadow: mode === "login" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-                }}
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => { setMode("register"); setError(""); }}
-                style={{
-                  flex: 1,
-                  padding: "8px 12px",
-                  borderRadius: 6,
-                  border: "none",
-                  background: mode === "register" ? colors.surface : "transparent",
-                  color: mode === "register" ? colors.textPrimary : colors.textSecondary,
-                  fontWeight: mode === "register" ? 700 : 500,
-                  cursor: "pointer",
-                  fontSize: 13,
-                  boxShadow: mode === "register" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-                }}
-              >
-                Create Account
-              </button>
-            </div>
+                  <h4 style={{ margin: "0 0 4px 0", color: colors.textPrimary, fontSize: 13, fontWeight: 700 }}>
+                    Data we protect
+                  </h4>
+                  <ul style={{ margin: "0 0 12px 0", paddingLeft: 18 }}>
+                    <li>Mobile number (your identity &amp; email handle)</li>
+                    <li>Password (stored with military-grade encryption)</li>
+                    <li>Mail messages &amp; attachments (for inbox delivery only)</li>
+                  </ul>
 
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: colors.textSecondary, marginBottom: 6, textTransform: "uppercase" }}>
-                Password
-              </label>
-              <PasswordField
-                value={password}
-                onChange={setPassword}
-                autoFocus
-                autoComplete={mode === "register" ? "new-password" : "current-password"}
-              />
-              {mode === "register" && <StrengthMeter password={password} />}
-            </div>
+                  <a
+                    href="/terms.html"
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: "var(--c-navy)", fontWeight: 600, textDecoration: "none" }}
+                  >
+                    Read full Terms of Service &amp; Privacy Policy ↗
+                  </a>
+                </div>
 
-            {mode === "register" && (
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: colors.textSecondary, marginBottom: 6, textTransform: "uppercase" }}>
-                  Confirm Password
+                <label
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 10,
+                    fontSize: 13,
+                    cursor: "pointer",
+                    color: colors.textPrimary,
+                    userSelect: "none",
+                    marginBottom: 16,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  <ThemedCheckbox
+                    checked={termsAgreed}
+                    onChange={(val) => setTermsAgreed(val)}
+                    size={20}
+                    style={{ marginTop: 1 }}
+                    ariaLabel="Agree to Terms of Service"
+                  />
+                  <span>
+                    I agree to {APP_NAME}'s{" "}
+                    <a href="/terms.html" target="_blank" rel="noreferrer" style={{ color: "var(--c-navy)", fontWeight: 600 }}>
+                      Terms of Service &amp; Privacy Policy
+                    </a>
+                  </span>
                 </label>
-                <PasswordField
-                  value={confirmPassword}
-                  onChange={setConfirmPassword}
-                  placeholder="Confirm password"
-                  autoComplete="new-password"
-                />
+
+                <button
+                  type="button"
+                  disabled={!termsAgreed}
+                  className="btn-primary"
+                  onClick={() => setStep(3)}
+                  style={{
+                    width: "100%",
+                    minHeight: 48,
+                    height: 48,
+                    background: "var(--primary)",
+                    color: "var(--on-primary)",
+                    borderRadius: "var(--r-md)",
+                    fontSize: 15,
+                    fontWeight: 600,
+                  }}
+                >
+                  Agree and continue
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ width: "100%", marginTop: 10 }}
+                  onClick={() => setStep(1)}
+                >
+                  Back
+                </button>
               </div>
             )}
 
-            {mode === "login" && (
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
-                <Link to="/forgot-password" style={{ fontSize: 13, color: colors.accent, textDecoration: "none" }}>
-                  Forgot password?
-                </Link>
-              </div>
+            {/* ── STEP 3: Phone Number Input ───────────────────────────────────── */}
+            {step === 3 && (
+              <form onSubmit={handlePhoneSubmit}>
+                <div style={{ textAlign: "center", marginBottom: 20 }}>
+                  <div
+                    className="login-step-icon-circle"
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: "50%",
+                      background: "var(--primary-tint)",
+                      color: "var(--link)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      margin: "0 auto 10px auto",
+                    }}
+                  >
+                    <span style={{ fontSize: 22 }}>📱</span>
+                  </div>
+                  <h2 style={{ margin: "0 0 6px 0", fontSize: 20, fontWeight: 700, color: colors.textPrimary }}>
+                    Enter your phone number
+                  </h2>
+                  <p style={{ margin: 0, fontSize: 13, color: colors.textSecondary }}>
+                    This becomes your {APP_NAME} email address.
+                  </p>
+                </div>
+
+                <div style={{ marginBottom: 18 }}>
+                  <label
+                    htmlFor="phone"
+                    className="pm-label"
+                    style={{ marginTop: 0 }}
+                  >
+                    Mobile Phone Number
+                  </label>
+                  <div className="login-input-wrap">
+                    <span
+                      aria-hidden="true"
+                      style={{ alignSelf: "stretch", display: "flex", alignItems: "center", padding: "0 14px", background: "var(--raised)", border: "1px solid var(--border)", borderRadius: "var(--r-md) 0 0 var(--r-md)", color: colors.textPrimary, fontSize: 16, fontWeight: 600, fontFamily: "var(--font-sans)" }}
+                    >+91</span>
+                    <input
+                      id="phone"
+                      name="phone"
+                      type="tel"
+                      placeholder="9876543210"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                      onPaste={(e) => { e.preventDefault(); setPhone(cleanPhone(e.clipboardData.getData("text"))); }}
+                      inputMode="numeric"
+                      maxLength={10}
+                      autoFocus
+                      autoComplete="tel-national"
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        border: "none",
+                        outline: "none",
+                        padding: "14px 16px 14px 12px",
+                        fontSize: 16,
+                        background: "transparent",
+                        color: colors.textPrimary,
+                        fontFamily: "var(--font-sans)",
+                      }}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 8,
+                      padding: "8px 12px",
+                      borderRadius: "var(--r-sm)",
+                      background: "var(--c-surface-alt)",
+                      fontSize: 12,
+                      color: colors.textSecondary,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
+                  >
+                    <span>Your address will be:</span>
+                    <strong style={{ color: "var(--c-navy)", fontWeight: 700 }}>
+                      {(phone.replace(/[^\d]/g, "").length === 10 ? `91${phone.replace(/[^\d]/g, "")}` : phone.replace(/[^\d]/g, "")) || "..."}@{EMAIL_DOMAIN}
+                    </strong>
+                  </div>
+                </div>
+
+                {mode === "register" && (
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10, margin: "4px 0 16px", fontSize: 13, lineHeight: 1.4, color: "var(--text)" }}>
+                    <ThemedCheckbox
+                      checked={termsAgreed}
+                      onChange={(val) => setTermsAgreed(val)}
+                      size={20}
+                      style={{ marginTop: 1 }}
+                      ariaLabel={t("termsAgreePrefix") + " " + t("termsLinkText")}
+                    />
+                    <span>
+                      {t("termsAgreePrefix")}{" "}
+                      <button type="button" className="terms-link" onClick={() => setTermsOpen(true)}>{t("termsLinkText")}</button>
+                    </span>
+                  </div>
+                )}
+                <button type="submit" disabled={loading || (mode === "register" && !termsAgreed)} className="btn-primary" style={{ width: "100%", minHeight: 48, height: 48, background: "var(--primary)", color: "var(--on-primary)", borderRadius: "var(--r-md)", fontSize: 15, fontWeight: 600 }}>
+                  {loading ? "Please wait..." : "Next"}
+                </button>
+                {mode === "login" && (
+                  <p style={{ margin: "12px 0 0", fontSize: 12, lineHeight: 1.4, textAlign: "center", color: colors.textSecondary }}>
+                    {t("termsFootnotePrefix")}{" "}
+                    <button type="button" className="terms-link" onClick={() => setTermsOpen(true)}>{t("termsLinkText")}</button>
+                  </p>
+                )}
+                <TermsDialog open={termsOpen} onClose={() => setTermsOpen(false)} />
+
+                {mode === "register" && <button type="button" className="btn-secondary" style={{ width: "100%", marginTop: 10 }} onClick={() => { setMode("login"); setPhoneOtpRequired(true); setSignupGrant(""); setStep(3); }}>Already have an account? Sign in</button>}
+              </form>
             )}
 
-            <button type="submit" disabled={loading} style={buttonStyle}>
-              {loading ? "Please wait..." : mode === "register" ? "Create Account & Enter" : "Sign In"}
-            </button>
+            {/* Signup OTP entry; login skips this step. */}
+            {step === 4 && mode === "register" && !signupGrant && (
+              <form onSubmit={handleOtpSubmit}>
+                <h2 style={{ margin: "0 0 6px 0", fontSize: 20, fontWeight: 700, color: colors.textPrimary }}>Enter the verification code</h2>
+                <p>We sent a one-time code to {phone}. Your browser may offer to autofill it.</p>
+                <input name="otpCode" type="text" inputMode="numeric" autoComplete="one-time-code" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 10))} maxLength={10} autoFocus />
+                <button type="submit" disabled={loading} className="btn-primary" style={{ width: "100%", minHeight: 48, marginTop: 16 }}>{loading ? "Please wait..." : "Next"}</button>
+                <button type="button" disabled={loading || resendSeconds > 0} className="btn-secondary" style={{ width: "100%", marginTop: 10 }} onClick={handleResendOtp}>{resendSeconds ? `Resend code in ${resendSeconds}s` : "Resend code"}</button>
+              </form>
+            )}
 
-            <button type="button" style={secondaryBtnStyle} onClick={() => setStep(3)}>
-              Change Phone Number
-            </button>
-          </form>
-        )}
+            {/* Login is step 4; verified signup sets its password in step 5. */}
+            {((step === 4 && mode === "login") || (step === 5 && mode === "register" && (!phoneOtpRequired || signupGrant))) && (
+              <form onSubmit={handleAuthSubmit}>
+                <div style={{ textAlign: "center", marginBottom: 18 }}>
+                  <h2 style={{ margin: "0 0 6px 0", fontSize: 20, fontWeight: 700, color: colors.textPrimary }}>
+                    {mode === "register" ? "Create your password" : "Enter your password"}
+                  </h2>
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      background: "var(--c-navy-light)",
+                      color: "var(--c-navy)",
+                      padding: "4px 10px",
+                      borderRadius: 14,
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <span>Account:</span>
+                    <strong>{(phone.replace(/[^\d]/g, "").length === 10 ? `91${phone.replace(/[^\d]/g, "")}` : phone.replace(/[^\d]/g, ""))}@{EMAIL_DOMAIN}</strong>
+                  </div>
+                </div>
+
+                {/* Mode Selector Tab (Sign In / Create Account) */}
+                <div
+                  style={{
+                    display: "flex",
+                    background: "var(--c-surface-alt)",
+                    borderRadius: "var(--r-md)",
+                    padding: 4,
+                    marginBottom: 20,
+                  }}
+                >
+                  <button
+                    type="button"
+                onClick={() => { setMode("login"); setError(""); setSignupGrant(""); setOtpCode(""); setPhoneOtpRequired(true); setPassword(""); setConfirmPassword(""); setStep(4); }}
+                    style={{
+                      flex: 1,
+                      minHeight: 40,
+                      padding: "8px 12px",
+                      borderRadius: "calc(var(--r-md) - 2px)",
+                      border: "none",
+                      background: mode === "login" ? "var(--c-surface)" : "transparent",
+                      color: mode === "login" ? "var(--c-navy)" : colors.textSecondary,
+                      fontWeight: mode === "login" ? 700 : 500,
+                      cursor: "pointer",
+                      fontSize: 13,
+                      fontFamily: "var(--font-sans)",
+                      boxShadow: mode === "login" ? "var(--shadow-sm)" : "none",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    type="button"
+                onClick={() => { setMode("register"); setError(""); setSignupGrant(""); setOtpCode(""); setPhoneOtpRequired(true); setPassword(""); setConfirmPassword(""); setStep(3); }}
+                    style={{
+                      flex: 1,
+                      minHeight: 40,
+                      padding: "8px 12px",
+                      borderRadius: "calc(var(--r-md) - 2px)",
+                      border: "none",
+                      background: mode === "register" ? "var(--c-surface)" : "transparent",
+                      color: mode === "register" ? "var(--c-navy)" : colors.textSecondary,
+                      fontWeight: mode === "register" ? 700 : 500,
+                      cursor: "pointer",
+                      fontSize: 13,
+                      fontFamily: "var(--font-sans)",
+                      boxShadow: mode === "register" ? "var(--shadow-sm)" : "none",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    Create Account
+                  </button>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <label
+                    htmlFor="password"
+                    className="pm-label"
+                    style={{ marginTop: 0 }}
+                  >
+                    Password
+                  </label>
+                  <PasswordField
+                    id="password"
+                    name="password"
+                    value={password}
+                    onChange={setPassword}
+                    autoFocus
+                    autoComplete={mode === "register" ? "new-password" : "current-password"}
+                  />
+                  {mode === "register" && <StrengthMeter password={password} />}
+                </div>
+
+                {mode === "register" && (
+                  <div style={{ marginBottom: 18 }}>
+                    <label
+                      htmlFor="confirmPassword"
+                      className="pm-label"
+                      style={{ marginTop: 0 }}
+                    >
+                      Confirm Password
+                    </label>
+                    <PasswordField
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      value={confirmPassword}
+                      onChange={setConfirmPassword}
+                      placeholder="Confirm your password"
+                      autoComplete="new-password"
+                    />
+                  </div>
+                )}
+
+                {mode === "login" && (
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+                    <Link
+                      to="/forgot-password"
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "var(--c-navy)",
+                        textDecoration: "none",
+                      }}
+                    >
+                      Forgot password?
+                    </Link>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="btn-primary"
+                  style={{
+                    width: "100%",
+                    minHeight: 48,
+                    height: 48,
+                    background: "var(--primary)",
+                    color: "var(--on-primary)",
+                    borderRadius: "var(--r-md)",
+                    fontSize: 15,
+                    fontWeight: 600,
+                  }}
+                >
+                  {loading ? "Please wait..." : mode === "register" ? "Create Account & Enter" : "Sign In"}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ width: "100%", marginTop: 10 }}
+                  onClick={() => { setSignupGrant(""); setOtpCode(""); setPhoneOtpRequired(true); setStep(3); }}
+                >
+                  Change Phone Number
+                </button>
+              </form>
+            )}
+          </div>
+        </main>
       </div>
     </div>
   );

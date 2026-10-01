@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { updateEmail, downloadAttachment, BASE_URL } from "../api/client.js";
 import { useTheme } from "../theme/ThemeContext.jsx";
-import { Reply, Trash2, ShieldAlert, Star, Volume2, VolumeX, FileText, Download, Check, CheckCheck } from "lucide-react";
+import { Reply, Trash2, ShieldAlert, Star, Volume2, VolumeX, FileText, Download, Check, CheckCheck, ArrowRight } from "lucide-react";
 import {
   VOICE_LANGUAGES,
   getSavedSpeechLang,
@@ -95,20 +95,20 @@ export default function EmailView({ email, refreshList, onReply }) {
   const toDisplay   = resolveTo(email);
 
   return (
-    <div style={{ flex: 1, padding: 24, overflowY: "auto", background: colors.surface, color: colors.textPrimary }}>
-      {/* Toolbar */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+    <div className="chat-scroll-container" style={{ flex: 1, padding: 24, overflowY: "auto", background: colors.surface, color: colors.textPrimary }}>
+      <div style={{ maxWidth: 860, margin: "0 auto", width: "100%" }}>
+        {/* Toolbar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {onReply && (
             <button
               type="button"
-              className="icon-btn"
+              className="btn-text"
               style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                fontWeight: 600, fontSize: 13, padding: "5px 12px",
-                color: colors.textAccent, background: colors.accentLight,
-                borderRadius: 16, border: `1px solid ${colors.borderStrong}`,
-                cursor: "pointer",
+                color: "var(--link)",
+                background: "var(--raised)",
+                fontSize: 13,
+                fontWeight: 600,
               }}
               title="Reply to message"
               onClick={() => onReply(email)}
@@ -124,7 +124,7 @@ export default function EmailView({ email, refreshList, onReply }) {
             <ShieldAlert size={17} color={colors.textSecondary} />
           </button>
           <button type="button" className="icon-btn" style={{ border: "none", background: "none", cursor: "pointer", padding: "6px", display: "flex", alignItems: "center" }} title="Favorite" onClick={() => act({ is_favorite: email.is_favorite ? 0 : 1 })}>
-            <Star size={17} fill={email.is_favorite ? "#f59e0b" : "none"} color={email.is_favorite ? "#f59e0b" : colors.textSecondary} />
+            <Star size={17} fill={email.is_favorite ? "var(--important)" : "none"} color={email.is_favorite ? "var(--important)" : colors.textSecondary} />
           </button>
         </div>
 
@@ -133,19 +133,13 @@ export default function EmailView({ email, refreshList, onReply }) {
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button
               type="button"
-              className="icon-btn"
+              className="btn-text"
               style={{
-                background:    isSpeaking ? colors.accent    : colors.surfaceAlt,
-                color:         isSpeaking ? "#fff"           : colors.textAccent,
-                border:        `1px solid ${isSpeaking ? colors.accent : colors.borderStrong}`,
-                borderRadius:  18,
-                padding:       "6px 14px",
-                cursor:        "pointer",
-                fontSize:      13,
-                fontWeight:    600,
-                display:       "flex",
-                alignItems:    "center",
-                gap:           6,
+                background: isSpeaking ? "var(--primary)" : "var(--raised)",
+                color: isSpeaking ? "var(--on-primary)" : "var(--text)",
+                border: isSpeaking ? "none" : "1px solid var(--border-strong)",
+                fontSize: 13,
+                fontWeight: 600,
               }}
               onClick={handleToggleSpeak}
               title={isSpeaking ? "Stop reading aloud" : "Read message aloud"}
@@ -175,7 +169,7 @@ export default function EmailView({ email, refreshList, onReply }) {
       <div style={{ color: colors.textSecondary, fontSize: 13, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <strong style={{ color: colors.textPrimary }}>{fromDisplay}</strong>
-          {" → "}
+          <ArrowRight size={13} style={{ display: "inline-block", verticalAlign: "middle", margin: "0 6px", opacity: 0.6 }} aria-hidden="true" />
           {toDisplay}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -218,8 +212,8 @@ export default function EmailView({ email, refreshList, onReply }) {
             {attachments.map((att, idx) => {
               const isImage = (att.contentType || att.mime_type || "").startsWith("image/");
               const isPdf = (att.contentType || att.mime_type || "").toLowerCase().includes("pdf") || (att.filename || "").toLowerCase().endsWith(".pdf");
-              const downloadUrl = `${BASE_URL}/mail/attachments/${att.id}/download`;
-              const previewUrl  = `${BASE_URL}/mail/attachments/${att.id}`;
+              const downloadUrl = `${BASE_URL}/mail/attachments/${att.id}/download?token=${encodeURIComponent(localStorage.getItem("phonemail_token") || "")}`;
+              const previewUrl  = `${BASE_URL}/mail/attachments/${att.id}?token=${encodeURIComponent(localStorage.getItem("phonemail_token") || "")}`;
 
               return (
                 <div key={att.id || idx} style={{ border: `1px solid ${colors.border}`, borderRadius: 8, width: 220, overflow: "hidden", background: colors.surfaceAlt, display: "flex", flexDirection: "column" }}>
@@ -260,6 +254,7 @@ export default function EmailView({ email, refreshList, onReply }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

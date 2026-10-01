@@ -1,0 +1,15 @@
+{
+  "name": "Bharat Chat",
+  "short_name": "Bharat Chat",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#1F3A6E",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/assets/logo-mark.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png"
+    }
+  ]
+}

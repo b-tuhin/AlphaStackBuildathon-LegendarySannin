@@ -1,12 +1,16 @@
 {
-  "name": "@phonemail/web",
+  "name": "@bharatchat/web",
   "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint:ui": "node scripts/lint-ui.mjs",
+    "assets:check": "node scripts/assets-check.mjs",
+    "assets:lock": "node scripts/assets-check.mjs",
+    "verify": "npm run build && npm run lint:ui && npm run assets:check"
   },
   "dependencies": {
     "axios": "^1.7.4",
@@ -17,6 +21,10 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
+    "pixelmatch": "^7.2.0",
+    "playwright": "^1.63.0",
+    "pngjs": "^7.0.0",
+    "sharp": "^0.35.5",
     "vite": "^5.4.2"
   }
 }

@@ -13,7 +13,7 @@ services:
       - "4000:4000"
       - "2525:2525"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - PORT=4000
       - SMTP_PORT=2525
       - MAIL_DOMAIN=phonemail.com
@@ -21,7 +21,13 @@ services:
       - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
       - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
       - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER:-}
-      - TWILIO_MOCK=${TWILIO_MOCK:-true}
+      - TWILIO_MOCK=${TWILIO_MOCK:-false}
+      - OTP_MODE=${OTP_MODE:-twilio}
+      - TWILIO_VERIFY_SERVICE_SID=${TWILIO_VERIFY_SERVICE_SID:-}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost:4000}
+      - TOS_VERSION=${TOS_VERSION:-1}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - DB_PATH=/app/data/phonemail.db
     volumes:
       - phonemail-db:/app/data

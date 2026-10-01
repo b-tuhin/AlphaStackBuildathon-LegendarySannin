@@ -4,6 +4,7 @@ import { useI18n } from "../i18n/I18nContext.jsx";
 import { getImportantMessages, updateEmail } from "../api/client.js";
 import { getAvatarInitials, getAvatarColor, formatPhoneNumber } from "../utils/contact.js";
 import { Star, Users } from "lucide-react";
+import Avatar from "./Avatar.jsx";
 
 function formatRelativeDate(isoStr) {
   if (!isoStr) return "";
@@ -56,7 +57,7 @@ export default function ImportantList({ onSelect }) {
   if (loading && items.length === 0) {
     return (
       <div style={{ flex: 1, display: "flex", flexDirection: "column", background: colors.surface }}>
-        <div style={{ flex: 1, overflowY: "auto" }}>
+        <div className="chat-scroll-container" style={{ flex: 1, overflowY: "auto" }}>
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
@@ -106,7 +107,7 @@ export default function ImportantList({ onSelect }) {
           </p>
         </div>
       ) : (
-        <div style={{ flex: 1, overflowY: "auto" }}>
+        <div className="chat-scroll-container" style={{ flex: 1, overflowY: "auto" }}>
           {items.map((item) => {
             const displayName = item.is_group
               ? (item.counterpart_name || "Group")
@@ -134,23 +135,14 @@ export default function ImportantList({ onSelect }) {
                 }}
               >
                 {/* Avatar */}
-                <div
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 22,
-                    background: avatarBg,
-                    color: "#fff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontWeight: 700,
-                    fontSize: 16,
-                    flexShrink: 0,
-                  }}
-                >
-                  {initials}
-                </div>
+                <Avatar
+                  src={item.is_group ? item.avatar_url : item.from_avatar_url}
+                  name={displayName}
+                  colorKey={avatarKey}
+                  isGroup={Boolean(item.is_group)}
+                  size={44}
+                  fontSize={16}
+                />
 
                 {/* Content */}
                 <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
@@ -230,7 +222,7 @@ export default function ImportantList({ onSelect }) {
                     justifyContent: "center",
                   }}
                 >
-                  <Star size={17} fill="#f59e0b" color="#f59e0b" />
+                  <Star size={17} fill="var(--important)" color="var(--important)" />
                 </button>
               </div>
             );

@@ -93,7 +93,7 @@ export default function VoiceLanguageMenu({
     if (open && menuRef.current) {
       const itemEl = menuRef.current.children[focusedIndex];
       if (itemEl && typeof itemEl.scrollIntoView === "function") {
-        itemEl.scrollIntoView({ block: "nearest" });
+        const mEl = menuRef.current; const tp = itemEl.offsetTop; if (tp < mEl.scrollTop) { mEl.scrollTop = tp; } else if (tp + itemEl.offsetHeight > mEl.scrollTop + mEl.clientHeight) { mEl.scrollTop = tp + itemEl.offsetHeight - mEl.clientHeight; }
       }
     }
   }, [open, focusedIndex]);
@@ -164,18 +164,19 @@ export default function VoiceLanguageMenu({
         <div
           ref={menuRef}
           role="listbox"
+          className="themed-menu-scrollbar"
           aria-label={title}
           style={{
             position: "absolute",
             bottom: "calc(100% + 6px)",
-            left: 0,
+            ...((children || popupOnly) ? { right: 0 } : { left: 0 }),
             minWidth: 170,
             maxHeight: 240,
             overflowY: "auto",
             background: colors.surface,
             border: `1px solid ${colors.borderStrong}`,
             borderRadius: 8,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+            boxShadow: "var(--shadow-sm)",
             zIndex: 3500,
             padding: "4px 0",
             display: "flex",

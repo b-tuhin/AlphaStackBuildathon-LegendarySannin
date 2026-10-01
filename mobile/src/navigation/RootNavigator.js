@@ -6,6 +6,7 @@ import { createDrawerNavigator } from "@react-navigation/drawer";
 import LanguageScreen from "../screens/onboarding/LanguageScreen";
 import TermsScreen from "../screens/onboarding/TermsScreen";
 import PhoneInputScreen from "../screens/onboarding/PhoneInputScreen";
+import PhoneOtpScreen from "../screens/onboarding/PhoneOtpScreen";
 import CreatePasswordScreen from "../screens/onboarding/CreatePasswordScreen";
 import PasswordLoginScreen from "../screens/onboarding/PasswordLoginScreen";
 import ForgotPasswordScreen from "../screens/onboarding/ForgotPasswordScreen";
@@ -22,6 +23,7 @@ import ProfileScreen from "../screens/ProfileScreen";
 
 import { useTheme } from "../theme/ThemeContext";
 import { useI18n } from "../i18n/I18nContext";
+import { Ionicons } from "@expo/vector-icons";
 import * as LocalAuthentication from "expo-local-authentication";
 import {
   getToken,
@@ -46,6 +48,7 @@ function OnboardingNavigator() {
       <OnboardingStack.Screen name="Language" component={LanguageScreen} />
       <OnboardingStack.Screen name="Terms" component={TermsScreen} />
       <OnboardingStack.Screen name="PhoneInput" component={PhoneInputScreen} />
+      <OnboardingStack.Screen name="PhoneOtp" component={PhoneOtpScreen} />
       <OnboardingStack.Screen name="CreatePassword" component={CreatePasswordScreen} />
       <OnboardingStack.Screen name="PasswordLogin" component={PasswordLoginScreen} />
       <OnboardingStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
@@ -61,16 +64,54 @@ function DrawerNavigator() {
     <Drawer.Navigator
       screenOptions={{
         headerShown: false,
-        drawerActiveTintColor: colors.primaryLight,
+        drawerActiveTintColor: colors.accent,
         drawerInactiveTintColor: colors.textSecondary,
-        drawerStyle: { backgroundColor: colors.card },
+        drawerStyle: { backgroundColor: colors.surface || colors.card },
+        edgeWidth: 24,
+        swipeEdgeWidth: 24,
+        swipeEnabled: true,
       }}
     >
-      <Drawer.Screen name="Inbox" component={InboxScreen} options={{ title: t("folderHome") }} />
-      <Drawer.Screen name="Important" component={ImportantScreen} options={{ title: t("folderImportant") }} />
-      <Drawer.Screen name="Drafts" component={DraftsScreen} options={{ title: t("folderDrafts") }} />
-      <Drawer.Screen name="Spam" component={SpamScreen} options={{ title: t("folderSpam") }} />
-      <Drawer.Screen name="Trash" component={TrashScreen} options={{ title: t("folderTrash") }} />
+      <Drawer.Screen
+        name="Inbox"
+        component={InboxScreen}
+        options={{
+          title: t("folderHome"),
+          drawerIcon: ({ color, size }) => <Ionicons name="mail-outline" size={size} color={color} />,
+        }}
+      />
+      <Drawer.Screen
+        name="Important"
+        component={ImportantScreen}
+        options={{
+          title: t("folderImportant"),
+          drawerIcon: ({ size }) => <Ionicons name="star" size={size} color="#f59e0b" />,
+        }}
+      />
+      <Drawer.Screen
+        name="Drafts"
+        component={DraftsScreen}
+        options={{
+          title: t("folderDrafts"),
+          drawerIcon: ({ color, size }) => <Ionicons name="document-text-outline" size={size} color={color} />,
+        }}
+      />
+      <Drawer.Screen
+        name="Spam"
+        component={SpamScreen}
+        options={{
+          title: t("folderSpam"),
+          drawerIcon: ({ color, size }) => <Ionicons name="alert-circle-outline" size={size} color={color} />,
+        }}
+      />
+      <Drawer.Screen
+        name="Trash"
+        component={TrashScreen}
+        options={{
+          title: t("folderTrash"),
+          drawerIcon: ({ color, size }) => <Ionicons name="trash-outline" size={size} color={color} />,
+        }}
+      />
     </Drawer.Navigator>
   );
 }
@@ -85,7 +126,7 @@ function MainNavigator() {
       }}
     >
       <MainStack.Screen name="Drawer" component={DrawerNavigator} options={{ headerShown: false }} />
-      <MainStack.Screen name="Chat" component={ChatScreen} />
+      <MainStack.Screen name="Chat" component={ChatScreen} options={{ headerShown: false }} />
       <MainStack.Screen name="Compose" component={ComposeScreen} options={{ headerShown: false }} />
       <MainStack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
     </MainStack.Navigator>

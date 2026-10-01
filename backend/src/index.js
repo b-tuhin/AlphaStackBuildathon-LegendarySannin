@@ -12,16 +12,11 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
-
 app.get("/health", (_req, res) => res.json({ ok: true, service: "phonemail-backend" }));
-
 app.use("/auth", authRoutes);
 app.use("/mail", mailRoutes);
 app.use("/users", userRoutes);
 app.use("/webhooks", webhookRoutes);
 
-app.listen(config.port, "0.0.0.0", () =>
-  console.log(`[api] PhoneMail API on :${config.port}`)
-);
-
+app.listen(config.port, "0.0.0.0", () => console.log(`[api] PhoneMail API on :${config.port}; OTP_MODE=${config.otpMode}`));
 startSmtpServer();

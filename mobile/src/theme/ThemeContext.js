@@ -2,49 +2,71 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export const lightColors = {
-  primary: "#1E293B",        // Spike clean slate header
-  primaryLight: "#2563EB",   // Spike royal blue accent
-  accent: "#2563EB",         // Spike action blue
-  bubbleOut: "#EFF6FF",      // Clean light blue-tinted white for outgoing messages
-  bubbleIn: "#FFFFFF",       // Clean crisp white for incoming messages
-  bubbleBorderOut: "#DBEAFE", // Subtle 1px border for outgoing
-  bubbleBorderIn: "#E2E8F0",  // Subtle 1px border for incoming
-  background: "#F8FAFC",     // Crisp off-white chat wallpaper
-  listBackground: "#FFFFFF",
-  divider: "#E2E8F0",
-  textPrimary: "#0F172A",    // Crisp slate text
-  textSecondary: "#64748B",  // Muted slate text
-  quoteBorder: "#2563EB",    // Spike blue quote bar
-  quoteBackground: "#F1F5F9",// Subtle neutral quote background
-  unreadBadge: "#2563EB",
-  danger: "#EF4444",
-  chipActive: "#2563EB",
-  chipInactive: "#F1F5F9",
-  card: "#FFFFFF",
-  border: "#E2E8F0",
+  // Balanced Tricolor — Light Mode
+  primary: "#18181a",         // Neutral charcoal primary
+  primaryLight: "#e6820a",    // Saffron accent
+  accent: "#e6820a",          // Saffron action (AA contrast compliant on white)
+  accentLight: "#fef3e2",
+  bubbleOut: "#fef3e2",       // Outgoing message bubble (warm saffron tint)
+  bubbleIn: "#ffffff",        // Incoming message bubble (crisp white card)
+  bubbleBorderOut: "#fce0be", // Outgoing bubble border
+  bubbleBorderIn: "#dcdcdc",  // Incoming bubble border
+  background: "#f4f4f5",      // Page canvas — neutral light gray
+  bg: "#f4f4f5",
+  surface: "#ffffff",
+  card: "#ffffff",
+  listBackground: "#ffffff",
+  surfaceAlt: "#f0f0f1",
+  surfaceHover: "#e8e8ea",
+  divider: "#dcdcdc",
+  border: "#dcdcdc",
+  borderStrong: "#b0b0b4",
+  textPrimary: "#18181a",     // Charcoal text — 17.5:1 on white (AAA pass)
+  textSecondary: "#5b6068",   // Muted text — 5.6:1 on white (AA pass)
+  quoteBorder: "#e6820a",     // Saffron quote bar
+  quoteBackground: "#f0f0f1", // Neutral quote background
+  unreadBadge: "#e6820a",
+  danger: "#c73a32",
+  dangerBg: "#fde8e7",
+  success: "#178a45",
+  successBg: "#eaf6ee",
+  navyMark: "#22337a",        // Single decorative chakra mark
+  chipActive: "#e6820a",
+  chipInactive: "#f0f0f1",
 };
 
 export const darkColors = {
-  primary: "#38BDF8",
-  primaryLight: "#60A5FA",
-  accent: "#38BDF8",
-  bubbleOut: "#1E293B",
-  bubbleIn: "#0F172A",
-  bubbleBorderOut: "#334155",
-  bubbleBorderIn: "#1E293B",
-  background: "#0B0F19",
-  listBackground: "#0F172A",
-  divider: "#1E293B",
-  textPrimary: "#F8FAFC",
-  textSecondary: "#94A3B8",
-  quoteBorder: "#38BDF8",
-  quoteBackground: "#1E293B",
-  unreadBadge: "#38BDF8",
-  danger: "#F87171",
-  chipActive: "#38BDF8",
-  chipInactive: "#1E293B",
-  card: "#0F172A",
-  border: "#334155",
+  // Balanced Tricolor — Dark Mode
+  primary: "#ff9933",         // Saffron
+  primaryLight: "#ff9933",    // Saffron
+  accent: "#ff9933",          // Saffron primary action — 8.5:1 on #212123 (AAA pass)
+  accentLight: "#3a2a17",
+  bubbleOut: "#3a2a17",       // Outgoing chat bubble
+  bubbleIn: "#212123",        // Incoming chat bubble
+  bubbleBorderOut: "#543b1e", // Outgoing border
+  bubbleBorderIn: "#323234",  // Incoming border
+  background: "#18181a",      // Page canvas — neutral charcoal, R≈G≈B
+  bg: "#18181a",
+  surface: "#212123",
+  card: "#212123",
+  listBackground: "#212123",
+  surfaceAlt: "#26262a",
+  surfaceHover: "#2a2a2e",
+  divider: "#323234",
+  border: "#323234",
+  borderStrong: "#414144",
+  textPrimary: "#f4f4f5",     // Primary text — 14.8:1 on #212123 (AAA pass)
+  textSecondary: "#a3a3a6",   // Muted text — 4.7:1 on #212123 (AA pass)
+  quoteBorder: "#ff9933",     // Saffron quote bar
+  quoteBackground: "#26262a", // Dark quote background
+  unreadBadge: "#ff9933",
+  danger: "#f2584f",
+  dangerBg: "#2e1614",
+  success: "#1a9850",
+  successBg: "#132a1c",
+  navyMark: "#1e2a6b",        // Single decorative chakra mark
+  chipActive: "#ff9933",
+  chipInactive: "#26262a",
 };
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };

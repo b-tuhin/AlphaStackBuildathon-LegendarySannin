@@ -19,9 +19,8 @@ export default function ForgotPasswordScreen({ route, navigation }) {
     if (digits.length < 7) return Alert.alert("Invalid number", "Enter a valid phone number.");
     setLoading(true);
     try {
-      const { data } = await requestPasswordReset(digits);
-      if (data.resetCode) Alert.alert("Dev reset code", data.resetCode);
-      else Alert.alert("Check your messages", "If that number has an account, we sent a reset code by SMS.");
+      await requestPasswordReset(phone);
+      Alert.alert("Check your messages", "If that number has an account, we sent a reset code by SMS.");
       setStep("confirm");
     } catch (err) {
       Alert.alert("Couldn't send code", err?.response?.data?.error || err.message);
@@ -36,9 +35,9 @@ export default function ForgotPasswordScreen({ route, navigation }) {
     setLoading(true);
     try {
       const digits = phone.replace(/[^\d]/g, "");
-      await confirmPasswordReset(digits, code, password, confirm);
+      await confirmPasswordReset(phone, code, password, confirm);
       Alert.alert("Password updated", "Sign in with your new password.");
-      navigation.replace("PasswordLogin", { phone: digits });
+          navigation.replace("PasswordLogin", { phone });
     } catch (err) {
       Alert.alert("Reset failed", err?.response?.data?.error || err.message);
     } finally {
@@ -53,10 +52,9 @@ export default function ForgotPasswordScreen({ route, navigation }) {
         <>
           <Text style={styles.subtitle}>We'll send a reset code by SMS.</Text>
           <View style={styles.phoneRow}>
-            <Text style={styles.prefix}>+</Text>
-            <TextInput
+              <TextInput
               style={styles.phoneInput}
-              placeholder="Phone number"
+              placeholder="+91 98765 43210"
               keyboardType="phone-pad"
               value={phone}
               onChangeText={setPhone}
@@ -68,7 +66,7 @@ export default function ForgotPasswordScreen({ route, navigation }) {
         </>
       ) : (
         <>
-          <Text style={styles.subtitle}>Enter the code sent to +{phone.replace(/[^\d]/g, "")} and choose a new password.</Text>
+          <Text style={styles.subtitle}>Enter the code sent to {phone} and choose a new password.</Text>
           <TextInput
             style={styles.codeInput}
             placeholder="6-digit code"

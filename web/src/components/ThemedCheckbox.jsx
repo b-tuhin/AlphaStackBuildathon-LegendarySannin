@@ -39,7 +39,7 @@ export default function ThemedCheckbox({
       style={{
         width: size,
         height: size,
-        borderRadius: 4,
+        borderRadius: 6,
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
@@ -56,7 +56,7 @@ export default function ThemedCheckbox({
         <Check
           size={13}
           strokeWidth={3}
-          color="#fff"
+          color="var(--on-primary)"
           style={{ pointerEvents: "none" }}
         />
       )}

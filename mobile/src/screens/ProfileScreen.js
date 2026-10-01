@@ -15,7 +15,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../theme/ThemeContext";
 import { useI18n } from "../i18n/I18nContext";
 import { spacing, typography } from "../theme/whatsapp";
-import { getMe, updateMe, addAlias, clearToken, clearRefreshToken } from "../api/client";
+import { getMe, updateMe, addAlias, deleteAlias, clearToken, clearRefreshToken } from "../api/client";
 import { formatPhoneNumber, getAvatarInitials, getAvatarColor } from "../utils/contact";
 import LanguagePickerModal from "../components/LanguagePickerModal";
 
@@ -59,6 +59,28 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
+  const handleDeleteAlias = (aliasToDelete) => {
+    Alert.alert(
+      "Remove Alias",
+      `Are you sure you want to remove ${aliasToDelete}@phonemail.com?`,
+      [
+        { text: t("cancel") || "Cancel", style: "cancel" },
+        {
+          text: t("delete") || "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const { data } = await deleteAlias(aliasToDelete);
+              setMe({ ...me, aliases: data.aliases });
+            } catch (e) {
+              Alert.alert("Error", e?.response?.data?.error || e.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleSelectLanguage = (langCode) => {
     setLang(langCode);
   };
@@ -92,20 +114,32 @@ export default function ProfileScreen({ navigation }) {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header Bar */}
-      <View style={[styles.header, { backgroundColor: colors.primary }]}>
+      <View style={[styles.header, { backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t("profileSettings")}</Text>
-        <View style={{ width: 24 }} />
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>{t("profileSettings")}</Text>
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.navyMark }} />
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+        {/* Header Band behind content (§7) */}
+        <View style={[styles.headerBand, { backgroundColor: colors.surfaceAlt, borderBottomColor: colors.border }]}>
+          <View style={[styles.ambientLine, { borderColor: colors.accent }]} />
+          <View style={[styles.ambientLine2, { borderColor: colors.success }]} />
+        </View>
+
         {/* Profile Card */}
         <View style={styles.avatarWrap}>
-          <View style={[styles.avatar, { backgroundColor: avatarBg }]}>
+          <View style={[styles.avatar, { backgroundColor: avatarBg, borderColor: colors.surface }]}>
             <Text style={styles.avatarText}>{initials}</Text>
           </View>
+
+          <View style={[styles.statusBadge, { backgroundColor: colors.successBg || "#132a1c" }]}>
+            <Ionicons name="shield-checkmark" size={12} color={colors.success} style={{ marginRight: 4 }} />
+            <Text style={[styles.statusBadgeText, { color: colors.success }]}>Active Account</Text>
+          </View>
+
           <Text style={[styles.phoneText, { color: colors.textPrimary }]}>
             {formatPhoneNumber(me.phone)}
           </Text>
@@ -135,9 +169,19 @@ export default function ProfileScreen({ navigation }) {
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>{t("aliasIds")}</Text>
           {(me.aliases || []).map((a) => (
-            <Text key={a} style={[styles.aliasItem, { color: colors.textPrimary }]}>
-              • {a}@phonemail.com
-            </Text>
+            <View key={a} style={styles.aliasRow}>
+              <Text style={[styles.aliasItem, { color: colors.textPrimary, flex: 1 }]}>
+                • {a}@phonemail.com
+              </Text>
+              <TouchableOpacity
+                onPress={() => handleDeleteAlias(a)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={{ padding: 4 }}
+                accessibilityLabel={`Remove alias ${a}`}
+              >
+                <Ionicons name="trash-outline" size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
           ))}
           <View style={[styles.inputRow, { borderBottomColor: colors.divider, marginTop: 8 }]}>
             <TextInput
@@ -221,20 +265,60 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     height: 56,
   },
-  headerTitle: { color: "#fff", fontSize: 18, fontWeight: "700" },
-  avatarWrap: { alignItems: "center", paddingVertical: spacing.xl },
+  headerTitle: { fontSize: 18, fontWeight: "700" },
+  headerBand: {
+    height: 100,
+    width: "100%",
+    borderBottomWidth: 1,
+    position: "relative",
+    overflow: "hidden",
+  },
+  ambientLine: {
+    position: "absolute",
+    top: 25,
+    left: -40,
+    right: -40,
+    height: 60,
+    borderWidth: 1.5,
+    borderRadius: 30,
+    opacity: 0.35,
+  },
+  ambientLine2: {
+    position: "absolute",
+    top: 50,
+    left: -20,
+    right: -20,
+    height: 50,
+    borderWidth: 1,
+    borderRadius: 25,
+    opacity: 0.25,
+  },
+  avatarWrap: { alignItems: "center", marginTop: -40, paddingBottom: spacing.lg },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
+    borderWidth: 3,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 3,
+  },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    marginBottom: 6,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
   },
   avatarText: { color: "#fff", fontSize: 32, fontWeight: "700" },
   phoneText: { fontSize: 18, fontWeight: "700", marginTop: 4 },
@@ -257,6 +341,12 @@ const styles = StyleSheet.create({
   saveBtn: { paddingHorizontal: 12, paddingVertical: 6 },
   link: { fontWeight: "700", fontSize: 14 },
   aliasItem: { fontSize: 14, marginVertical: 3 },
+  aliasRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 3,
+  },
   settingRow: {
     flexDirection: "row",
     alignItems: "center",

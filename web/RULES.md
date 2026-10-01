@@ -1,0 +1,15 @@
+RULES (read at the start of every session; this replaces pasting the rules)
+- Layout: the web app is in web/. Paths are relative to web/. Never touch mobile/, backend/, node_modules/. Change web/dist/ only by running npm run build. No git commands, no README edits.
+- index.css and i18n/strings.js use CRLF line endings and have garbled comment characters. Never rewrite or re-save a whole file; targeted search-and-replace only. ChatView.jsx is 160 KB: never open it whole; grep first, then view small line ranges.
+- Do not touch API calls, routes, state, handlers, or any id/name/data-attribute used by JS.
+- IMAGES: never generate, edit, resize, recompress, convert, crop or redraw any image. Only files in web/_originals/ may be used, copied byte-for-byte. If a needed file is missing there, STOP and tell me.
+- BRAND: the product name is "Bharat Chat". PhoneMail (any casing or spacing) must not appear in visible text, title, meta, manifest, i18n, alt text or comments. Exceptions: storage keys starting with "phonemail_" and the @phonemail.com email domain. In JS/JSX read the name from src/config/brand.js.
+- BRAND VISIBILITY: the text "Bharat Chat" is visible only on login, register and the loading splash; everywhere else the logo alone.
+- PALETTE: Gulabi (Jaipur pink) only. Colours may be defined only in src/theme/tokens.css. Everywhere else use var(--token). No hex/rgb/hsl outside that file.
+- DARK MODE: background, surface, raised, borders and grey text are pure neutral (R=G=B). No brown, warm charcoal or blue tint. No box-shadows in dark mode; use 1px borders.
+- LOOK: no new fonts, gradients, glass effects, illustrations, decorative SVG or animation. Only 150ms colour/opacity transitions.
+- Images may be referenced only through src/config/assets.js.
+- If an inline style conflicts with a CSS rule, change the inline value. Never add !important.
+- PROGRESS LOG: before a step that edits more than 3 files, append "IN PROGRESS: Prompt N step X" to web/PROGRESS.md. After every numbered step, replace it with "Prompt N step X done: <files>".
+- CHECKS: there is no ui-assert and no shots script. Ignore any exit criterion that mentions them. Done means: npm run verify exits 0 and you paste its last 20 lines, plus one line per requirement saying what you changed. No screenshots unless I ask.
+- SAVING CREDITS: do not re-read files you already changed this session, do not print whole files, do not repeat these rules back, keep the final report under 10 lines.

@@ -1,0 +1,90 @@
+version: "3.9"
+
+name: phonemail
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: phonemail-backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+      - "2525:2525"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - SMTP_PORT=2525
+      - MAIL_DOMAIN=phonemail.com
+      - JWT_SECRET=${JWT_SECRET}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER:-}
+      - TWILIO_MOCK=${TWILIO_MOCK:-true}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - DB_PATH=/app/data/phonemail.db
+    volumes:
+      - phonemail-db:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - phonemail-net
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:4000
+    container_name: phonemail-web
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - phonemail-net
+
+  mobile:
+    build:
+      context: ./mobile
+      dockerfile: Dockerfile
+    container_name: phonemail-mobile
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+      - "19000:19000"
+      - "19001:19001"
+      - "19002:19002"
+    environment:
+      - EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0
+      - REACT_NATIVE_PACKAGER_HOSTNAME=${HOST_IP:-192.168.1.100}
+      - EXPO_PUBLIC_API_URL=http://${HOST_IP:-192.168.1.100}:4000
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - phonemail-net
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: phonemail-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - phonemail-net
+
+volumes:
+  phonemail-db:
+
+networks:
+  phonemail-net:
+    driver: bridge

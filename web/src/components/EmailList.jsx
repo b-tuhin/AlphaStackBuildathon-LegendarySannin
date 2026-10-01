@@ -144,7 +144,7 @@ function SwipeableEmailRow({ email, selectedId, onSelect, onRetry, onDelete, onA
             </span>
             <button
               type="button"
-              style={{ fontSize: 11, padding: "2px 6px", background: colors.danger, color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}
+              style={{ fontSize: 11, padding: "2px 6px", background: colors.danger, color: "var(--on-primary)", border: "none", borderRadius: 4, cursor: "pointer" }}
               onClick={() => onRetry && onRetry(email)}
             >
               Retry
@@ -167,7 +167,7 @@ export default function EmailList({ emails, selectedId, onSelect, loading, onRet
 
   if (loading && (!emails || emails.length === 0)) {
     return (
-      <div style={{ flex: 1, overflowY: "auto", background: colors.surface }}>
+      <div className="chat-scroll-container" style={{ flex: 1, overflowY: "auto", background: colors.surface }}>
         {[1, 2, 3, 4, 5, 6].map((i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: `1px solid ${colors.border}`, gap: 12 }}>
             <div style={{ height: 14, background: colors.surfaceAlt, borderRadius: 4, width: 130 }} />
@@ -185,7 +185,7 @@ export default function EmailList({ emails, selectedId, onSelect, loading, onRet
   }
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", background: colors.surface }}>
+    <div className="chat-scroll-container" style={{ flex: 1, overflowY: "auto", background: colors.surface }}>
       {emails.map((e) => (
         <SwipeableEmailRow
           key={e.id}

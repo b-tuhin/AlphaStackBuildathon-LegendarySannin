@@ -1,0 +1,12 @@
+[
+  {
+    "id": "doodle",
+    "label": "Doodle",
+    "file": "/assets/wallpaper-doodle-light.png",
+    "fileDark": "/assets/wallpaper-doodle-dark.png",
+    "thumb": "/assets/wallpaper-doodle-light.png",
+    "alt": "Doodle chat wallpaper",
+    "credit": "",
+    "enabled": true
+  }
+]

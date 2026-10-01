@@ -71,7 +71,10 @@ export default function ImportantScreen({ navigation }) {
         <TouchableOpacity onPress={handleGoBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Important Messages</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Ionicons name="star" size={20} color="#f59e0b" />
+          <Text style={styles.headerTitle}>Important Messages</Text>
+        </View>
         <View style={{ width: 24 }} />
       </View>
 

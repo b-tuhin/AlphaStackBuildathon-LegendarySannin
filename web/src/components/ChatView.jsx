@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useMemo, useLayoutEffect, useCallba
 import { createPortal } from "react-dom";
 import {
   ArrowLeft,
-  FileEdit,
+  MessageCircle,
+  Plus,
   Trash2,
   Paperclip,
   Mic,
@@ -22,19 +23,23 @@ import {
   Minus,
   MoreVertical,
   Copy,
-  Pencil,
   Eye,
   Search,
   ChevronUp,
   ChevronDown,
   Globe,
+  Languages,
 } from "lucide-react";
+import ComposeIcon from "./ComposeIcon.jsx";
+import { useNavigate } from "react-router-dom";
 import {
   getThreadMessages,
   uploadAttachment,
   assistDraft,
+  translateMessage,
   downloadAttachment,
   updateEmail,
+  lookupPhone,
   BASE_URL,
 } from "../api/client.js";
 import { useTheme } from "../theme/ThemeContext.jsx";
@@ -46,6 +51,8 @@ import {
   getAvatarColor,
 } from "../utils/contact.js";
 import { useIsMobile } from "../utils/useIsMobile.js";
+import Avatar from "./Avatar.jsx";
+import GroupInfoModal from "./GroupInfoModal.jsx";
 import {
   VOICE_LANGUAGES,
   getSavedSpeechLang,
@@ -57,9 +64,15 @@ import {
   speakText,
   stopSpeaking,
   isSpeechSynthesisSupported,
+  detectScriptLanguage,
+  getVoiceLangForCode,
 } from "../utils/speech.js";
 import ThemedCheckbox from "./ThemedCheckbox.jsx";
 import VoiceLanguageMenu from "./VoiceLanguageMenu.jsx";
+import PlaceholderResolverBar from "./PlaceholderResolverBar.jsx";
+import { translateInBrowser } from "../utils/translateFallback.js";
+import { highlightText } from "../utils/textHighlight.jsx";
+
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 
@@ -76,6 +89,25 @@ function formatBytes(bytes) {
   const sizes = ["B", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
+
+function isActualSubjectValue(candidate, ...bodyTexts) {
+  if (!candidate || typeof candidate !== "string") return false;
+  const cleanSub = candidate.trim();
+  if (!cleanSub) return false;
+  if (/^\(?no subject\)?$/i.test(cleanSub) || cleanSub === "-") return false;
+
+  for (const b of bodyTexts) {
+    if (b && typeof b === "string") {
+      const cleanBody = b.trim();
+      if (!cleanBody) continue;
+      if (cleanSub.toLowerCase() === cleanBody.toLowerCase()) return false;
+      if (cleanBody.toLowerCase().startsWith(cleanSub.toLowerCase()) && cleanSub.length >= 3) return false;
+      if (cleanSub.toLowerCase().startsWith(cleanBody.toLowerCase()) && cleanBody.length >= 3) return false;
+    }
+  }
+
+  return true;
 }
 
 function MessageBubbleItem({
@@ -120,9 +152,102 @@ function MessageBubbleItem({
   readAloudMenuMsgId,
   setReadAloudMenuMsgId,
   voiceWarning,
+  onTranslationTriggered,
+  topGap = 12,
+  searchQuery = "",
 }) {
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [isSnapping, setIsSnapping] = useState(false);
+
+  const { lang, supportedLanguages } = useI18n();
+  const [translation, setTranslation] = useState(null);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [showTranslateSubmenu, setShowTranslateSubmenu] = useState(false);
+
+  const rawBodyText = msg.body_text || (msg.body_html ? msg.body_html.replace(/<[^>]+>/g, "") : "") || "";
+  const detectedBubbleLang = useMemo(() => detectScriptLanguage(rawBodyText, lang), [rawBodyText, lang]);
+
+  const isTranslated = Boolean(
+    translation &&
+    !translation.showOriginal &&
+    translation.text &&
+    translation.text.trim() &&
+    translation.text.trim() !== rawBodyText.trim()
+  );
+  const isShowingTranslated = isTranslated;
+  const displayedBodyText = isTranslated ? translation.text : (msg.body_text || rawBodyText);
+  const shouldShowInlineTranslate = Boolean(rawBodyText.trim() && (detectedBubbleLang !== lang || isTranslated));
+
+  const getLanguageLabel = (code) => {
+    const found = supportedLanguages?.find((l) => l.code === code);
+    return found?.label || found?.name || code;
+  };
+
+  const handleTranslateTo = async (targetCode) => {
+    if (!rawBodyText.trim() || isTranslating) return;
+    setIsTranslating(true);
+    try {
+      let translated = null;
+      let unchanged = false;
+      try {
+        const res = await translateMessage({
+          text: rawBodyText,
+          targetLangCode: targetCode,
+        });
+        translated = res?.data?.translatedText;
+        unchanged = Boolean(res?.data?.unchanged);
+      } catch (apiErr) {
+        // The server couldn't reach a translation provider: try from the browser.
+        console.warn("Server translation failed, trying browser fallback:", apiErr?.message);
+        translated = await translateInBrowser(rawBodyText, targetCode);
+      }
+      if (
+        !unchanged &&
+        translated &&
+        typeof translated === "string" &&
+        translated.trim() &&
+        translated.trim() !== rawBodyText.trim()
+      ) {
+        setTranslation({
+          text: translated.trim(),
+          targetLang: targetCode,
+          fromLang: detectedBubbleLang,
+          showOriginal: false,
+        });
+        onTranslationTriggered?.("info");
+      } else {
+        setTranslation(null);
+        onTranslationTriggered?.("same");
+      }
+    } catch (err) {
+      console.error("Translation failed:", err);
+      setTranslation(null);
+      onTranslationTriggered?.("error");
+    } finally {
+      setIsTranslating(false);
+      setShowTranslateSubmenu(false);
+      setActiveMenuMsgId(null);
+    }
+  };
+
+  const handleToggleTranslate = async (e) => {
+    e.stopPropagation();
+    if (isTranslating) return;
+
+    if (translation && translation.text && translation.text.trim() !== rawBodyText.trim()) {
+      const nextShowOriginal = !translation.showOriginal;
+      setTranslation((prev) => ({
+        ...prev,
+        showOriginal: nextShowOriginal,
+      }));
+      if (!nextShowOriginal) {
+        onTranslationTriggered?.("info");
+      }
+      return;
+    }
+
+    await handleTranslateTo(lang);
+  };
 
   const longPressTimerRef = useRef(null);
   const touchStartPosRef = useRef(null);
@@ -138,49 +263,16 @@ function MessageBubbleItem({
   const [menuPosition, setMenuPosition] = useState(null);
   const lastTapRef = useRef({ time: 0, x: 0, y: 0 });
 
-  const computePosition = useCallback((directionOverride) => {
-    if (typeof window === "undefined" || !triggerBtnRef.current) return null;
-    const btnRect = triggerBtnRef.current.getBoundingClientRect();
-    const menuEl = menuRef.current;
-    const menuWidth = menuEl?.offsetWidth || 180;
-    const menuHeight = menuEl?.offsetHeight || (deletingMsgId === msg.id ? 85 : 240);
-
-    const dir = directionOverride || menuDirection || "down";
-
-    // Horizontal positioning: align right edge with button right edge, clamped to viewport
-    let left = btnRect.right - menuWidth;
-    const minLeft = 8;
-    const maxLeft = Math.max(minLeft, window.innerWidth - menuWidth - 8);
-    left = Math.max(minLeft, Math.min(left, maxLeft));
-
-    // Vertical positioning:
-    const MARGIN = 6;
-    let top;
-    let maxHeight = "calc(100vh - 20px)";
-
-    if (dir === "up") {
-      top = btnRect.top - menuHeight - MARGIN;
-      if (top < 8) {
-        top = 8;
-        maxHeight = `${Math.max(100, btnRect.top - MARGIN - 8)}px`;
-      }
-    } else {
-      top = btnRect.bottom + MARGIN;
-      if (top + menuHeight > window.innerHeight - 8) {
-        maxHeight = `${Math.max(100, window.innerHeight - 8 - top)}px`;
-      }
-    }
-
-    return { top, left, maxHeight };
-  }, [deletingMsgId, msg.id, menuDirection]);
-
   useLayoutEffect(() => {
-    if (activeMenuMsgId === msg.id) {
-      setMenuPosition(computePosition(menuDirection));
-    } else {
+    if (activeMenuMsgId !== msg.id || !menuRef.current) {
       setMenuPosition(null);
+      return;
     }
-  }, [activeMenuMsgId, deletingMsgId, menuDirection, computePosition, msg.id]);
+    const rect = menuRef.current.getBoundingClientRect();
+    const trg = triggerBtnRef.current ? triggerBtnRef.current.getBoundingClientRect() : null; const need = menuRef.current.scrollHeight + 8; const below = trg ? window.innerHeight - trg.bottom - 12 : 9999; const above = trg ? trg.top - 12 : 0; const openUp = trg ? (below < need && above > below) : false; const maxHeight = Math.max(160, Math.min(need, openUp ? above : below));
+    const alignLeft = trg ? trg.right - menuRef.current.offsetWidth < 8 : false;
+    setMenuPosition({ openUp, alignLeft, maxHeight });
+  }, [activeMenuMsgId, msg.id, deletingMsgId, showTranslateSubmenu]);
 
   useEffect(() => {
     if (activeMenuMsgId !== msg.id) return;
@@ -219,7 +311,6 @@ function MessageBubbleItem({
           }
         }
 
-        setMenuPosition(computePosition());
       });
     };
 
@@ -240,7 +331,7 @@ function MessageBubbleItem({
       window.removeEventListener("resize", handleScrollOrResize);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [activeMenuMsgId, msg.id, computePosition, setActiveMenuMsgId, setDeletingMsgId]);
+  }, [activeMenuMsgId, msg.id, setActiveMenuMsgId, setDeletingMsgId]);
 
   useEffect(() => {
     return () => {
@@ -469,8 +560,10 @@ function MessageBubbleItem({
     if (activeMenuMsgId === msg.id) {
       setActiveMenuMsgId(null);
       setDeletingMsgId(null);
+      setShowTranslateSubmenu(false);
       return;
     }
+    setShowTranslateSubmenu(false);
 
     const btn = triggerBtnRef.current || e.currentTarget;
     const scrollContainer = btn?.closest(".chat-scroll-container");
@@ -519,18 +612,21 @@ function MessageBubbleItem({
   return (
     <div
       id={`msg-${msg.id}`}
+      className={`msg-bubble-appear${isHighlighted ? " msg-row-highlight" : ""}`}
       style={{
         display: "flex",
         flexDirection: "column",
         alignItems: isOwn ? "flex-end" : "flex-start",
         width: "100%",
         position: "relative",
+        zIndex: !selectionMode && activeMenuMsgId === msg.id ? 20 : "auto",
+        marginTop: topGap,
       }}
     >
       <div
         style={{
           position: "relative",
-          maxWidth: isMobile ? "85%" : "68%",
+          maxWidth: isMobile ? "85%" : "min(78%, 560px)",
           minWidth: 160,
           width: "fit-content",
         }}
@@ -548,12 +644,12 @@ function MessageBubbleItem({
               height: 30,
               borderRadius: "50%",
               background: reachedThreshold ? colors.accent : colors.surfaceAlt,
-              color: reachedThreshold ? "#fff" : colors.textSecondary,
+              color: reachedThreshold ? "var(--on-primary)" : colors.textSecondary,
               border: `1px solid ${reachedThreshold ? colors.accent : colors.borderStrong}`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              boxShadow: "var(--shadow-sm)",
               pointerEvents: "none",
               zIndex: 5,
               transition: isSnapping
@@ -567,6 +663,7 @@ function MessageBubbleItem({
 
         {/* Bubble card */}
         <div
+          className={[isHighlighted ? "msg-highlight" : "", msg.is_favorite ? "msg-important" : ""].filter(Boolean).join(" ") || undefined}
           onClick={handleBubbleClick}
           onDoubleClick={(e) => {
             if (!selectionMode) {
@@ -591,34 +688,36 @@ function MessageBubbleItem({
             userSelect: "text",
             cursor: selectionMode ? "pointer" : "default",
             background: isSelected
-              ? colors.accentLight
+              ? "var(--primary-tint)"
               : isHighlighted
-              ? (colors.highlightBg || (isOwn ? "#dcfce7" : "#fef9c3"))
+              ? undefined
               : msg.is_favorite
-              ? colors.favoriteBubbleBg
-              : (isOwn ? colors.bubbleOut : colors.bubbleIn),
+              ? (isOwn ? "var(--sent)" : "var(--received)")
+              : (isOwn ? "var(--sent)" : "var(--received)"),
             border: isSelected
-              ? `2px solid ${colors.accent}`
+              ? `2px solid var(--primary)`
               : isHighlighted
-              ? `2px solid ${colors.highlightBorder || colors.accent}`
+              ? "none"
               : msg.is_favorite
-              ? `1px solid ${colors.favoriteBubbleBorder}`
-              : `1px solid ${isOwn ? colors.bubbleBorderOut : colors.bubbleBorderIn}`,
-            borderRadius: 14,
-            padding: "10px 14px",
+              ? (isOwn ? "none" : "1px solid var(--border)")
+              : isOwn
+              ? "none"
+              : `1px solid var(--border)`,
+            borderRadius: isOwn ? "var(--r-lg) var(--r-lg) 6px var(--r-lg)" : "var(--r-lg) var(--r-lg) var(--r-lg) 6px",
+            padding: "12px 16px",
             boxShadow: isSelected
-              ? `0 0 0 3px ${colors.accentLight}, 0 4px 12px rgba(0,0,0,0.12)`
+              ? "var(--highlight-glow)"
               : isHighlighted
-              ? (colors.highlightGlow || `0 0 0 4px ${colors.accentLight || "rgba(37,99,235,0.25)"}, 0 4px 12px rgba(0,0,0,0.15)`)
+              ? undefined
               : msg.is_favorite
-              ? colors.favoriteBubbleGlow
-              : "0 1px 4px rgba(0,0,0,0.05)",
+              ? "var(--shadow-sm)"
+              : "var(--shadow-sm)",
             position: "relative",
-            color: colors.textPrimary,
+            color: "var(--text)",
           }}
         >
           {/* Bubble Header: Sender Avatar & Name + More Actions Menu */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, position: "relative" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 36, marginBottom: 4, position: "relative" }}>
             {selectionMode && (
               <ThemedCheckbox
                 checked={Boolean(isSelected)}
@@ -628,85 +727,91 @@ function MessageBubbleItem({
                 ariaLabel="Select message"
               />
             )}
-            <div
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: 11,
-                background: msgAvatarBg,
-                color: "#fff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 10,
-                fontWeight: 700,
-                flexShrink: 0,
-              }}
-            >
-              {msgInitials}
-            </div>
-            <span style={{ fontWeight: 700, fontSize: 13, color: isOwn ? colors.accent : colors.textPrimary, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <Avatar
+              src={isOwn ? me?.avatar_url : msg.from_avatar_url}
+              name={isOwn ? (me?.display_name || "You") : msgSenderName}
+              colorKey={msg.from_address}
+              size={24}
+              fontSize={11}
+            />
+            <span style={{ fontWeight: 700, fontSize: 13, color: "var(--link)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {msgSenderName}
             </span>
 
-            {/* More actions trigger button (hidden in multi-select mode) */}
+            {/* Inline Translate / Revert Toggle Button */}
+            {shouldShowInlineTranslate && !selectionMode && (
+              <button
+                type="button"
+                className="chip-btn"
+                onClick={handleToggleTranslate}
+                disabled={isTranslating}
+                style={{ flex: "none" }}
+                title={isShowingTranslated ? (t("showOriginal") || "Show original") : `${t("translate") || "Translate"} (${getLanguageLabel(lang)})`}
+                aria-label={isShowingTranslated ? (t("showOriginal") || "Show original") : (t("translate") || "Translate")}
+              >
+                <Languages size={12} strokeWidth={2} />
+                <span>
+                  {isTranslating
+                    ? (t("translating") || "Translating…")
+                    : isShowingTranslated
+                    ? (t("showOriginal") || "Show original")
+                    : (t("translate") || "Translate")}
+                </span>
+              </button>
+            )}
+
+            {/* More actions trigger button (kebab 36x36 with 44px tap target) */}
             {!selectionMode && (
               <button
                 ref={triggerBtnRef}
                 type="button"
-                className="icon-btn msg-actions-trigger"
+                className="kebab-btn msg-actions-trigger"
                 onClick={handleToggleMenu}
                 style={{
-                  background: activeMenuMsgId === msg.id ? colors.surfaceHover : "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: "2px 4px",
-                  borderRadius: 4,
-                  color: colors.textSecondary,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
+                  flex: "none",
+                  background: activeMenuMsgId === msg.id ? "var(--hover)" : "transparent",
                 }}
-                title="More actions"
-                aria-label="More actions"
+                title={t("moreOptions") || "More options"}
+                aria-label={t("moreOptions") || "More options"}
               >
-                <MoreVertical size={14} strokeWidth={2} />
+                <MoreVertical size={16} strokeWidth={2} />
               </button>
             )}
 
             {/* Popover / Dropdown Menu (Vertical WhatsApp-style) via Portal */}
-            {!selectionMode && activeMenuMsgId === msg.id && typeof document !== "undefined" && createPortal(
+            {!selectionMode && activeMenuMsgId === msg.id && (
               <div
                 ref={menuRef}
-                className="msg-actions-menu"
+                className="msg-actions-menu themed-menu-scrollbar"
                 onClick={(e) => e.stopPropagation()}
                 style={{
-                  position: "fixed",
-                  top: (menuPosition || computePosition(menuDirection))?.top ?? 0,
-                  left: (menuPosition || computePosition(menuDirection))?.left ?? 0,
-                  maxHeight: (menuPosition || computePosition(menuDirection))?.maxHeight ?? "calc(100vh - 20px)",
-                  overflowY: "auto",
-                  background: colors.surface,
-                  border: `1px solid ${colors.borderStrong}`,
-                  borderRadius: 10,
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
-                  padding: "6px",
+                  position: "absolute",
+                  top: menuPosition?.openUp ? "auto" : "calc(100% + 4px)",
+                  bottom: menuPosition?.openUp ? "calc(100% + 4px)" : "auto",
+                  maxHeight: menuPosition?.maxHeight, overflowY: "auto", right: menuPosition?.alignLeft ? "auto" : 0,
+                  left: menuPosition?.alignLeft ? 0 : "auto",
+                  minWidth: 220,
+                  maxWidth: "min(280px, calc(100vw - 32px))",
+                  padding: 6,
+                  borderRadius: "var(--r-md)",
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  boxShadow: "var(--shadow-sm)",
+                  zIndex: 2500,
                   display: "flex",
                   flexDirection: "column",
-                  alignItems: "stretch",
-                  minWidth: 170,
-                  zIndex: 2500,
+                  gap: 2,
                 }}
               >
                 {deletingMsgId === msg.id ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "6px 8px" }}>
-                    <span style={{ fontSize: 13, color: colors.danger, fontWeight: 600 }}>
+                    <span style={{ fontSize: 13, color: "var(--danger)", fontWeight: 600 }}>
                       Delete message?
                     </span>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <button
                         type="button"
-                        className="icon-btn icon-btn-danger"
+                        className="btn-text"
                         onClick={() => {
                           onDelete(msg);
                           setActiveMenuMsgId(null);
@@ -714,347 +819,278 @@ function MessageBubbleItem({
                         }}
                         style={{
                           flex: 1,
-                          display: "flex",
-                          alignItems: "center",
                           justifyContent: "center",
-                          gap: 6,
-                          background: colors.dangerBg,
-                          color: colors.danger,
-                          border: `1px solid ${colors.danger}`,
-                          borderRadius: 6,
-                          padding: "6px 10px",
+                          height: 36,
+                          minHeight: 36,
+                          background: "var(--danger-bg)",
+                          color: "var(--danger)",
+                          border: "1px solid var(--danger)",
                           fontSize: 12,
                           fontWeight: 600,
-                          cursor: "pointer",
                         }}
-                        title="Confirm delete"
-                        aria-label="Confirm delete"
                       >
-                        <Trash2 size={13} strokeWidth={2} />
+                        <Trash2 size={14} strokeWidth={2} />
                         <span>Delete</span>
                       </button>
                       <button
                         type="button"
-                        className="icon-btn icon-btn-danger"
+                        className="btn-text"
                         onClick={() => setDeletingMsgId(null)}
                         style={{
                           flex: 1,
-                          display: "flex",
-                          alignItems: "center",
                           justifyContent: "center",
-                          gap: 6,
-                          background: colors.surfaceAlt,
-                          color: colors.danger,
-                          border: `1px solid ${colors.borderStrong}`,
-                          borderRadius: 6,
-                          padding: "6px 10px",
+                          height: 36,
+                          minHeight: 36,
+                          background: "var(--raised)",
+                          color: "var(--text)",
+                          border: "1px solid var(--border-strong)",
                           fontSize: 12,
                           fontWeight: 600,
-                          cursor: "pointer",
                         }}
-                        title="Cancel"
-                        aria-label="Cancel"
                       >
-                        <X size={13} strokeWidth={2} color={colors.danger} />
+                        <X size={14} strokeWidth={2} />
                         <span>Cancel</span>
                       </button>
                     </div>
                   </div>
                 ) : (
                   <>
-                    {/* Reply */}
+                    {/* 1. Reply */}
                     <button
                       type="button"
-                      className="icon-btn"
+                      className="menu-item"
                       onClick={() => {
                         onReply(msg);
                         setActiveMenuMsgId(null);
                       }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "8px 12px",
-                        width: "100%",
-                        fontSize: 13,
-                        fontWeight: 500,
-                        textAlign: "left",
-                        borderRadius: 6,
-                        border: "none",
-                        background: "none",
-                        cursor: "pointer",
-                        color: colors.textPrimary,
-                      }}
+                      style={{ gap: 12 }}
                       title={t("replyDirectly") || "Reply"}
                       aria-label={t("replyDirectly") || "Reply"}
                     >
-                      <Reply size={15} strokeWidth={2} style={{ flexShrink: 0 }} />
-                      <span>{t("replyDirectly") || "Reply"}</span>
+                      <div style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <Reply size={18} strokeWidth={1.75} />
+                      </div>
+                      <span style={{ fontSize: 15, fontWeight: 500, textAlign: "left" }}>{t("replyDirectly") || "Reply"}</span>
                     </button>
 
                     {/* Reply Privately (group chats from others) */}
                     {isGroup && !isOwn && onReplyPrivately && (
                       <button
                         type="button"
-                        className="icon-btn"
+                        className="menu-item"
                         onClick={() => {
                           onReplyPrivately(msg);
                           setActiveMenuMsgId(null);
                         }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          padding: "8px 12px",
-                          width: "100%",
-                          fontSize: 13,
-                          fontWeight: 500,
-                          textAlign: "left",
-                          borderRadius: 6,
-                          border: "none",
-                          background: "none",
-                          cursor: "pointer",
-                          color: colors.textPrimary,
-                        }}
+                        style={{ gap: 12 }}
                         title={t("replyPrivate") || "Reply privately in 1:1 chat"}
                         aria-label={t("replyPrivate") || "Reply privately in 1:1 chat"}
                       >
-                        <Reply size={15} strokeWidth={2} style={{ transform: "scaleX(-1)", flexShrink: 0 }} />
-                        <span>{t("replyPrivate") || "Reply privately"}</span>
+                        <div style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <Reply size={18} strokeWidth={1.75} style={{ transform: "scale(-1, 1)" }} />
+                        </div>
+                        <span style={{ fontSize: 15, fontWeight: 500, textAlign: "left" }}>{t("replyPrivate") || "Reply privately"}</span>
                       </button>
                     )}
 
-                    {/* Star / Unstar */}
+                    {/* 2. Mark as important */}
                     <button
                       type="button"
-                      className="icon-btn"
+                      className="menu-item"
                       onClick={() => {
                         onToggleFavorite(msg);
                         setActiveMenuMsgId(null);
                       }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "8px 12px",
-                        width: "100%",
-                        fontSize: 13,
-                        fontWeight: 500,
-                        textAlign: "left",
-                        borderRadius: 6,
-                        border: "none",
-                        background: "none",
-                        cursor: "pointer",
-                        color: colors.textPrimary,
-                      }}
+                      style={{ gap: 12 }}
                       title={msg.is_favorite ? t("unmarkImportant") : t("markImportant")}
                       aria-label={msg.is_favorite ? t("unmarkImportant") : t("markImportant")}
                     >
-                      <Star
-                        size={15}
-                        strokeWidth={2}
-                        fill={msg.is_favorite ? "#f59e0b" : "none"}
-                        color={msg.is_favorite ? "#f59e0b" : colors.textSecondary}
-                        style={{ flexShrink: 0 }}
-                      />
-                      <span>{msg.is_favorite ? (t("unmarkImportant") || "Unstar") : (t("markImportant") || "Star")}</span>
+                      <div style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <Star
+                          size={18}
+                          strokeWidth={1.75}
+                          fill={msg.is_favorite ? "var(--important)" : "none"}
+                          color={msg.is_favorite ? "var(--important)" : "var(--muted)"}
+                        />
+                      </div>
+                      <span style={{ fontSize: 15, fontWeight: 500, textAlign: "left" }}>
+                        {msg.is_favorite ? (t("unmarkImportant") || "Unstar") : (t("markImportant") || "Star")}
+                      </span>
                     </button>
 
-                    {/* Read Aloud (TTS) with Language Selector */}
+                    {/* 3. Read aloud */}
                     {isSpeechSynthesisSupported() && (
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          width: "100%",
-                          borderRadius: 6,
-                          overflow: "visible",
-                          position: "relative",
+                      <button
+                        type="button"
+                        className={`menu-item ${speakingMsgId === msg.id ? "speaking-pulse" : ""}`}
+                        onClick={() => {
+                          onSpeak(msg, displayedBodyText);
+                          setActiveMenuMsgId(null);
                         }}
+                        style={{ gap: 12 }}
+                        title={speakingMsgId === msg.id ? (t("stopReading") || "Stop reading") : (t("readAloud") || "Read aloud")}
+                        aria-label={speakingMsgId === msg.id ? (t("stopReading") || "Stop reading") : (t("readAloud") || "Read aloud")}
                       >
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          onClick={() => {
-                            onSpeak(msg);
-                            setActiveMenuMsgId(null);
-                          }}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            padding: "8px 12px",
-                            flex: 1,
-                            fontSize: 13,
-                            fontWeight: 500,
-                            textAlign: "left",
-                            borderRadius: 6,
-                            border: "none",
-                            background: "none",
-                            cursor: "pointer",
-                            color: speakingMsgId === msg.id ? colors.accent : colors.textPrimary,
-                          }}
-                          title={speakingMsgId === msg.id ? t("stopReading") : t("readAloud")}
-                          aria-label={speakingMsgId === msg.id ? t("stopReading") : t("readAloud")}
-                        >
+                        <div style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                           {speakingMsgId === msg.id ? (
-                            <VolumeX size={15} strokeWidth={2} color={colors.accent} style={{ flexShrink: 0 }} />
+                            <VolumeX size={18} strokeWidth={1.75} style={{ color: "var(--primary)" }} />
                           ) : (
-                            <Volume2 size={15} strokeWidth={2} style={{ flexShrink: 0 }} />
+                            <Volume2 size={18} strokeWidth={1.75} />
                           )}
-                          <span>{speakingMsgId === msg.id ? (t("stopReading") || "Stop reading") : (t("readAloud") || "Read aloud")}</span>
-                        </button>
-
-                        <div style={{ paddingRight: 6 }}>
-                          <VoiceLanguageMenu
-                            value={readAloudLang}
-                            onSelect={(code) => {
-                              onSelectReadAloudLang(code, msg);
-                              setActiveMenuMsgId(null);
-                            }}
-                            isOpen={readAloudMenuMsgId === msg.id}
-                            onClose={() => setReadAloudMenuMsgId(null)}
-                            popupOnly
-                            menuStyle={{ right: 0, left: "auto", bottom: "calc(100% + 4px)" }}
-                          >
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setReadAloudMenuMsgId(readAloudMenuMsgId === msg.id ? null : msg.id);
-                              }}
-                              style={{
-                                background: colors.surfaceAlt,
-                                border: `1px solid ${colors.borderStrong || colors.border}`,
-                                borderRadius: 12,
-                                padding: "2px 6px",
-                                fontSize: 11,
-                                color: colors.textSecondary,
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 3,
-                              }}
-                              title="Choose reading language"
-                              aria-label="Choose reading language"
-                            >
-                              <Globe size={11} strokeWidth={2} />
-                              <span>{VOICE_LANGUAGES.find((l) => l.code === readAloudLang)?.name?.slice(0, 3) || "Eng"}</span>
-                              <ChevronDown size={10} strokeWidth={2} />
-                            </button>
-                          </VoiceLanguageMenu>
                         </div>
-                      </div>
+                        <span style={{ fontSize: 15, fontWeight: 500, textAlign: "left" }}>
+                          {speakingMsgId === msg.id ? (t("stopReading") || "Stop reading") : (t("readAloud") || "Read aloud")}
+                        </span>
+                      </button>
                     )}
 
-                    {/* Copy to Clipboard */}
+                    {/* 4. Translate to… */}
+                    <div>
+                      <button
+                        type="button"
+                        className="menu-item"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowTranslateSubmenu((prev) => !prev);
+                        }}
+                        disabled={isTranslating}
+                        style={{ gap: 12 }}
+                        title={t("translateTo") || "Translate to…"}
+                        aria-label={t("translateTo") || "Translate to…"}
+                      >
+                        <div style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <Languages size={18} strokeWidth={1.75} />
+                        </div>
+                        <span style={{ fontSize: 15, fontWeight: 500, textAlign: "left" }}>
+                          {isTranslating ? (t("translating") || "Translating…") : (t("translateTo") || "Translate to…")}
+                        </span>
+                        <ChevronDown
+                          size={16}
+                          strokeWidth={1.75}
+                          style={{
+                            marginLeft: "auto",
+                            transform: showTranslateSubmenu ? "rotate(180deg)" : "none",
+                            transition: "transform 150ms ease",
+                            color: "var(--muted)",
+                          }}
+                        />
+                      </button>
+
+                      {showTranslateSubmenu && (
+                        <div
+                          className="themed-menu-scrollbar"
+                          style={{
+                            paddingLeft: 32,
+                            maxHeight: 240,
+                            overflowY: "auto",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 2,
+                          }}
+                        >
+                          {supportedLanguages.map((l) => {
+                            const isCurrentTarget = translation?.targetLang === l.code && !translation?.showOriginal;
+                            return (
+                              <button
+                                key={l.code}
+                                type="button"
+                                className="menu-item"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleTranslateTo(l.code);
+                                }}
+                                style={{
+                                  height: 40,
+                                  minHeight: 40,
+                                  padding: "0 8px",
+                                  fontSize: 14,
+                                  justifyContent: "space-between",
+                                  background: isCurrentTarget ? "var(--primary-tint)" : "transparent",
+                                  color: isCurrentTarget ? "var(--link)" : "var(--text)",
+                                  fontWeight: isCurrentTarget ? 600 : 400,
+                                }}
+                              >
+                                <span>{l.label}</span>
+                                {isCurrentTarget && <Check size={14} strokeWidth={2.5} color="var(--link)" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Divider */}
+                    <div style={{ height: 1, background: "var(--border)", margin: "4px 0" }} />
+
+                    {/* 5. Copy */}
                     <button
                       type="button"
-                      className="icon-btn"
+                      className="menu-item"
                       onClick={() => {
                         onCopy(msg);
                         setTimeout(() => setActiveMenuMsgId(null), 300);
                       }}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "8px 12px",
-                        width: "100%",
-                        fontSize: 13,
-                        fontWeight: 500,
-                        textAlign: "left",
-                        borderRadius: 6,
-                        border: "none",
-                        background: "none",
-                        cursor: "pointer",
-                        color: copiedMsgId === msg.id ? colors.success : colors.textPrimary,
-                      }}
+                      style={{ gap: 12 }}
                       title={copiedMsgId === msg.id ? (t("copied") || "Copied") : (t("copy") || "Copy")}
                       aria-label={copiedMsgId === msg.id ? (t("copied") || "Copied") : (t("copy") || "Copy")}
                     >
-                      {copiedMsgId === msg.id ? (
-                        <Check size={15} strokeWidth={2.5} color={colors.success} style={{ flexShrink: 0 }} />
-                      ) : (
-                        <Copy size={15} strokeWidth={2} style={{ flexShrink: 0 }} />
-                      )}
-                      <span>{copiedMsgId === msg.id ? (t("copied") || "Copied!") : (t("copy") || "Copy")}</span>
+                      <div style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {copiedMsgId === msg.id ? (
+                          <Check size={18} strokeWidth={1.75} color="var(--success)" />
+                        ) : (
+                          <Copy size={18} strokeWidth={1.75} />
+                        )}
+                      </div>
+                      <span style={{ fontSize: 15, fontWeight: 500, textAlign: "left" }}>
+                        {copiedMsgId === msg.id ? (t("copied") || "Copied!") : (t("copy") || "Copy")}
+                      </span>
                     </button>
 
                     {/* Edit (own messages only) */}
                     {isOwn && (
                       <button
                         type="button"
-                        className="icon-btn"
+                        className="menu-item"
                         onClick={() => {
                           setEditingMsgId(msg.id);
                           setEditingText(msg.body_text || "");
                           setActiveMenuMsgId(null);
                         }}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                          padding: "8px 12px",
-                          width: "100%",
-                          fontSize: 13,
-                          fontWeight: 500,
-                          textAlign: "left",
-                          borderRadius: 6,
-                          border: "none",
-                          background: "none",
-                          cursor: "pointer",
-                          color: colors.textPrimary,
-                        }}
+                        style={{ gap: 12 }}
                         title={t("edit") || "Edit"}
                         aria-label={t("edit") || "Edit"}
                       >
-                        <Pencil size={15} strokeWidth={2} style={{ flexShrink: 0 }} />
-                        <span>{t("edit") || "Edit"}</span>
+                        <div style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <ComposeIcon size={18} strokeWidth={1.75} />
+                        </div>
+                        <span style={{ fontSize: 15, fontWeight: 500, textAlign: "left" }}>{t("edit") || "Edit"}</span>
                       </button>
                     )}
 
                     {/* Delete (own messages only) */}
                     {isOwn && (
-                      <>
-                        <div style={{ height: 1, background: colors.border, margin: "4px 0" }} />
-                        <button
-                          type="button"
-                          className="icon-btn icon-btn-danger"
-                          onClick={() => setDeletingMsgId(msg.id)}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            padding: "8px 12px",
-                            width: "100%",
-                            fontSize: 13,
-                            fontWeight: 500,
-                            textAlign: "left",
-                            borderRadius: 6,
-                            border: "none",
-                            background: "none",
-                            cursor: "pointer",
-                            color: colors.danger,
-                          }}
-                          title={t("delete") || "Delete"}
-                          aria-label={t("delete") || "Delete"}
-                        >
-                          <Trash2 size={15} strokeWidth={2} style={{ flexShrink: 0 }} />
-                          <span>{t("delete") || "Delete"}</span>
-                        </button>
-                      </>
+                      <button
+                        type="button"
+                        className="menu-item"
+                        onClick={() => setDeletingMsgId(msg.id)}
+                        style={{ gap: 12, color: "var(--danger)" }}
+                        title={t("delete") || "Delete"}
+                        aria-label={t("delete") || "Delete"}
+                      >
+                        <div style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <Trash2 size={18} strokeWidth={1.75} color="var(--danger)" />
+                        </div>
+                        <span style={{ fontSize: 15, fontWeight: 500, textAlign: "left" }}>{t("delete") || "Delete"}</span>
+                      </button>
                     )}
                   </>
                 )}
-              </div>,
-              document.body
+              </div>
             )}
           </div>
 
           {/* Subject on Root Message */}
-          {!msg.in_reply_to && (
+          {!msg.in_reply_to && msg.subject && msg.subject.trim() && msg.subject !== "(no subject)" && !/^[\-\u2013\u2014\s]+$/.test(msg.subject) && (
             <div
               style={{
                 display: "flex",
@@ -1062,7 +1098,7 @@ function MessageBubbleItem({
                 gap: 6,
                 fontSize: 12,
                 fontWeight: msg.subject && msg.subject.trim() && msg.subject !== "(no subject)" ? 700 : 400,
-                color: colors.textSecondary,
+                color: "var(--muted)",
                 paddingBottom: 6,
                 marginBottom: 6,
                 borderBottom: `1px dashed ${colors.border}`,
@@ -1076,7 +1112,7 @@ function MessageBubbleItem({
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
-                    color: colors.textSecondary,
+                    color: "var(--muted)",
                     opacity: 0.6,
                   }}
                   title="No subject"
@@ -1116,7 +1152,7 @@ function MessageBubbleItem({
                 <div style={{ fontWeight: 700, color: colors.accent, marginBottom: 2 }}>
                   {referencedMsg?.from_name || referencedMsg?.from_display || formatPhoneNumber(referencedMsg?.from_address || "Original Message")}
                 </div>
-                <div style={{ color: colors.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                <div style={{ color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {referencedMsg?.body_text || referencedMsg?.subject || "(Referenced message)"}
                 </div>
               </div>
@@ -1127,8 +1163,41 @@ function MessageBubbleItem({
           {editingMsgId === msg.id ? (
             <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 6 }}>
               <textarea
+                ref={(el) => {
+                  if (el) {
+                    el.style.height = "auto";
+                    const maxH = Math.round(window.innerHeight * 0.4);
+                    el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
+                    el.style.overflowY = el.scrollHeight > maxH ? "auto" : "hidden";
+                  }
+                }}
                 value={editingText}
-                onChange={(e) => setEditingText(e.target.value)}
+                onChange={(e) => {
+                  setEditingText(e.target.value);
+                  const el = e.target;
+                  el.style.height = "auto";
+                  const maxH = Math.round(window.innerHeight * 0.4);
+                  el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
+                  el.style.overflowY = el.scrollHeight > maxH ? "auto" : "hidden";
+                }}
+                onInput={(e) => {
+                  const el = e.target;
+                  el.style.height = "auto";
+                  const maxH = Math.round(window.innerHeight * 0.4);
+                  el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
+                  el.style.overflowY = el.scrollHeight > maxH ? "auto" : "hidden";
+                }}
+                onPaste={(e) => {
+                  const el = e.target;
+                  setTimeout(() => {
+                    if (el) {
+                      el.style.height = "auto";
+                      const maxH = Math.round(window.innerHeight * 0.4);
+                      el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
+                      el.style.overflowY = el.scrollHeight > maxH ? "auto" : "hidden";
+                    }
+                  }, 0);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
@@ -1138,7 +1207,8 @@ function MessageBubbleItem({
                   }
                 }}
                 autoFocus
-                rows={2}
+                rows={1}
+                className="chat-scroll-container"
                 style={{
                   width: "100%",
                   padding: "6px 8px",
@@ -1148,10 +1218,12 @@ function MessageBubbleItem({
                   border: `1px solid ${colors.accent}`,
                   background: colors.surface,
                   color: colors.textPrimary,
-                  resize: "vertical",
+                  resize: "none",
                   outline: "none",
                   fontFamily: "inherit",
                   boxSizing: "border-box",
+                  minHeight: 36,
+                  maxHeight: "40vh",
                 }}
               />
               <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
@@ -1161,7 +1233,7 @@ function MessageBubbleItem({
                   disabled={!editingText.trim()}
                   style={{
                     background: colors.accent,
-                    color: "#fff",
+                    color: "var(--on-primary)",
                     border: "none",
                     borderRadius: 4,
                     padding: "4px 8px",
@@ -1180,8 +1252,8 @@ function MessageBubbleItem({
                   className="icon-btn-danger"
                   onClick={() => setEditingMsgId(null)}
                   style={{
-                    background: colors.surfaceAlt,
-                    color: colors.danger,
+                    background: "var(--raised)",
+                    color: "var(--danger)",
                     border: `1px solid ${colors.border}`,
                     borderRadius: 4,
                     padding: "4px 8px",
@@ -1197,8 +1269,26 @@ function MessageBubbleItem({
               </div>
             </div>
           ) : (
-            <div style={{ fontSize: 14, lineHeight: 1.5, wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
-              {msg.body_text || (msg.body_html ? msg.body_html.replace(/<[^>]+>/g, "") : "")}
+            <div>
+              <div style={{ fontSize: 14, lineHeight: 1.5, overflowWrap: "anywhere", wordBreak: "break-word", whiteSpace: "pre-wrap" }}>
+                {searchQuery ? highlightText(displayedBodyText, searchQuery) : displayedBodyText}
+              </div>
+
+              {/* Requirement 2: Small, subtle caption at the bottom of the translated bubble */}
+              {isShowingTranslated && (
+                <div
+                  style={{
+                    fontSize: 10,
+                    color: "var(--muted)",
+                    opacity: 0.65,
+                    fontStyle: "italic",
+                    marginTop: 4,
+                    userSelect: "none",
+                  }}
+                >
+                  {t("translatedCaption") || "Translated message"}
+                </div>
+              )}
             </div>
           )}
 
@@ -1220,29 +1310,31 @@ function MessageBubbleItem({
                       alignItems: "center",
                       gap: 8,
                       padding: "6px 10px",
-                      background: colors.surfaceAlt,
-                      borderRadius: 8,
+                      background: "var(--raised)",
+                      borderRadius: "var(--r-md)",
                       border: `1px solid ${colors.border}`,
                       fontSize: 12,
+                      maxWidth: "100%",
+                      boxSizing: "border-box",
                     }}
                   >
                     <Paperclip size={14} strokeWidth={2} color={colors.textSecondary} />
                     <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 600 }}>
                       {fname}
                     </span>
-                    {att.size && <span style={{ color: colors.textSecondary, flexShrink: 0 }}>{formatBytes(att.size)}</span>}
+                    {att.size && <span style={{ color: "var(--muted)", flexShrink: 0 }}>{formatBytes(att.size)}</span>}
                     {att.id && isPreviewable && onPreviewAttachment && (
                       <button
                         type="button"
                         onClick={() => onPreviewAttachment({
                           id: att.id,
-                          url: `${BASE_URL}/mail/attachments/${att.id}`,
+                          url: `${BASE_URL}/mail/attachments/${att.id}?token=${encodeURIComponent(localStorage.getItem("phonemail_token") || "")}`,
                           filename: fname,
                           type: isImg ? "image" : "pdf",
                         })}
                         style={{
                           background: colors.accentLight,
-                          border: `1px solid ${colors.borderStrong}`,
+                          border: "1px solid var(--border-strong)",
                           borderRadius: 4,
                           padding: "2px 8px",
                           color: colors.accent,
@@ -1313,9 +1405,9 @@ function MessageBubbleItem({
                 marginTop: 6,
                 padding: "3px 8px",
                 borderRadius: 6,
-                background: colors.surfaceAlt,
+                background: "var(--raised)",
                 border: `1px solid ${colors.border}`,
-                color: colors.textSecondary,
+                color: "var(--muted)",
                 fontSize: 11,
                 display: "flex",
                 alignItems: "center",
@@ -1335,15 +1427,15 @@ function MessageBubbleItem({
               justifyContent: "flex-end",
               gap: 6,
               marginTop: 6,
-              fontSize: 11,
-              color: colors.textSecondary,
+              fontSize: 12,
+              color: "var(--muted)",
             }}
           >
             {Boolean(msg.edited_at) && (
               <span
                 style={{
                   fontSize: 10,
-                  color: colors.textSecondary,
+                  color: "var(--muted)",
                   opacity: 0.7,
                   fontStyle: "italic",
                 }}
@@ -1390,12 +1482,21 @@ export default function ChatView({
   onOpenTraditionalCompose,
   onReplyPrivately,
   onDeleteThread,
+  onThreadUpdated,
   onBack,
   scrollToMessageId,
 }) {
   const { colors } = useTheme();
   const { t, lang } = useI18n();
   const isMobile = useIsMobile(768);
+  const isNarrow = useIsMobile(1023);
+
+  const navigate = useNavigate();
+
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [groupModalOpen, setGroupModalOpen]     = useState(false);
+  const [contactProfile, setContactProfile]     = useState(null);
+  const [contactLoading, setContactLoading]     = useState(false);
 
   const [readAloudLang, setReadAloudLang] = useState(() => {
     const defaultSpeechCode = VOICE_LANGUAGES.find((l) => l.code.startsWith(lang))?.code || "en-IN";
@@ -1407,13 +1508,56 @@ export default function ChatView({
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [highlightedMsgId, setHighlightedMsgId] = useState(null);
-  const scrolledRef = useRef(null);
+  const scrolledRef = useRef(null); const prevMsgCountRef = useRef(0); const pendingTargetRef = useRef(null);
   const [text, setText] = useState("");
   const [subject, setSubject] = useState("");
   const [replyingTo, setReplyingTo] = useState(null); // message object being replied to
+  const hasMyReply = (m) => Boolean(m) && messages.some((x) => x.in_reply_to && (x.in_reply_to === m.message_id || x.in_reply_to === m.id) && x.from_address === me?.email_address);
   const [attachments, setAttachments] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(""); const [replyNotice, setReplyNotice] = useState(false); useEffect(() => { if (!replyNotice) return undefined; const id = setTimeout(() => setReplyNotice(false), 2500); return () => clearTimeout(id); }, [replyNotice]);
+
+  // ── Phase 3: Chat Wallpaper (from localStorage, key "chatWallpaper") ─────
+  const [chatWallpaper, setChatWallpaper] = useState(() => {
+    try { return localStorage.getItem("chatWallpaper") === "none" ? "none" : "doodle"; } catch { return "doodle"; }
+  });
+
+  // Listen for wallpaper changes from Settings picker (storage event from same page)
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === "chatWallpaper") {
+        try { setChatWallpaper(e.newValue === "none" ? "none" : "doodle"); } catch {}
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const [wpTheme, setWpTheme] = useState(() => (document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light"));
+  const [wpFiles, setWpFiles] = useState(null);
+  useEffect(() => {
+    const el = document.documentElement;
+    const obs = new MutationObserver(() => setWpTheme(el.getAttribute("data-theme") === "dark" ? "dark" : "light"));
+    obs.observe(el, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
+  }, []);
+  useEffect(() => {
+    fetch("/assets/wallpapers/manifest.json").then((r) => r.json()).then((d) => {
+      const e = Array.isArray(d) ? d.find((x) => x.id === "doodle") : null;
+      if (e) setWpFiles(e);
+    }).catch(() => {});
+  }, []);
+  const wallpaperUrl = chatWallpaper === "none" || !wpFiles ? null : (wpTheme === "dark" ? (wpFiles.fileDark || wpFiles.file) : wpFiles.file);
+  // Allow Settings (same tab) to push updates via a CustomEvent
+  useEffect(() => {
+    const onWpChange = (e) => {
+      try { setChatWallpaper(e.detail === "none" ? "none" : "doodle"); } catch {}
+    };
+    window.addEventListener("chatWallpaperChange", onWpChange);
+    return () => window.removeEventListener("chatWallpaperChange", onWpChange);
+  }, []);
+
+
 
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -1432,6 +1576,22 @@ export default function ChatView({
     }, 800);
   };
 
+  const adjustInputHeight = useCallback(() => {
+    const el = textInputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const lineHeight = 24; // 16px font * 1.4-1.5
+    const maxHeight = lineHeight * 5; // grows to at most 5 lines
+    const minHeight = 24; // one line at rest
+    const newHeight = Math.min(el.scrollHeight, maxHeight);
+    el.style.height = `${Math.max(minHeight, newHeight)}px`;
+    el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, []);
+
+  useEffect(() => {
+    adjustInputHeight();
+  }, [text, adjustInputHeight]);
+
   useEffect(() => {
     return () => {
       if (scrollTimeoutRef.current) {
@@ -1446,6 +1606,40 @@ export default function ChatView({
   const [editingMsgId, setEditingMsgId] = useState(null);
   const [editingText, setEditingText] = useState("");
   const [deletingMsgId, setDeletingMsgId] = useState(null);
+
+  // ── Translation Disclaimer Notice State ─────────────────────────────────
+  const [translationNoticeVisible, setTranslationNoticeVisible] = useState(false);
+  const [translationNoticeKind, setTranslationNoticeKind] = useState("info");
+  const translationNoticeTimerRef = useRef(null);
+
+  // kind: "info" (accuracy disclaimer) | "same" (already in that language) | "error"
+  const handleTranslationTriggered = useCallback((kind = "info") => {
+    if (translationNoticeTimerRef.current) {
+      clearTimeout(translationNoticeTimerRef.current);
+    }
+    setTranslationNoticeKind(kind);
+    setTranslationNoticeVisible(true);
+    translationNoticeTimerRef.current = setTimeout(() => {
+      setTranslationNoticeVisible(false);
+      translationNoticeTimerRef.current = null;
+    }, kind === "info" ? 5000 : 6500);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (translationNoticeTimerRef.current) {
+        clearTimeout(translationNoticeTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (translationNoticeTimerRef.current) {
+      clearTimeout(translationNoticeTimerRef.current);
+      translationNoticeTimerRef.current = null;
+    }
+    setTranslationNoticeVisible(false);
+  }, [thread?.id]);
 
   useEffect(() => {
     const handleDocumentClick = (e) => {
@@ -1557,6 +1751,26 @@ export default function ChatView({
 
   // ── AI Assist State ───────────────────────────────────────────────────────
   const [showAssist, setShowAssist] = useState(false);
+  const [showPlusPopover, setShowPlusPopover] = useState(false);
+  const plusBtnRef = useRef(null);
+
+  useEffect(() => {
+    if (!showPlusPopover) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") setShowPlusPopover(false);
+    };
+    const handleClickOutside = (e) => {
+      const plusWrap = plusBtnRef.current && plusBtnRef.current.parentElement; if (plusWrap && !plusWrap.contains(e.target)) {
+        setShowPlusPopover(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("pointerdown", handleClickOutside);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("pointerdown", handleClickOutside);
+    };
+  }, [showPlusPopover]);
   const [assisting, setAssisting] = useState(false);
 
   // Fetch messages when thread changes
@@ -1564,8 +1778,18 @@ export default function ChatView({
     if (!thread?.id) return;
     setLoading(true);
     try {
-      const { data } = await getThreadMessages(thread.id, { folder });
+      const { data } = await getThreadMessages(thread.id, { folder: folder === "important" ? "home" : folder });
       setMessages(data);
+      const firstMsg = data && data.length > 0 ? data[0] : null;
+      if (firstMsg?.body_text) {
+        setSubject((curr) => {
+          if (!curr) return "";
+          if (!isActualSubjectValue(curr, thread?.body_text, thread?.last_message, firstMsg.body_text)) {
+            return "";
+          }
+          return curr;
+        });
+      }
     } catch (err) {
       console.error("[ChatView] Load error:", err);
     } finally {
@@ -1644,8 +1868,8 @@ export default function ChatView({
     setReplyingTo(null);
     setAttachments([]);
     setText("");
-    setSubject(thread?.subject || "");
-    scrolledRef.current = null;
+    setSubject("");
+    scrolledRef.current = null; pendingTargetRef.current = null;
     setHighlightedMsgId(null);
     setIsSearching(false);
     setSearchQuery("");
@@ -1664,23 +1888,23 @@ export default function ChatView({
   }, [thread?.id, folder]);
 
   useEffect(() => {
-    const targetId = scrollToMessageId || thread?.scrollToMessageId;
+    if (scrollToMessageId || thread?.scrollToMessageId) pendingTargetRef.current = scrollToMessageId || thread?.scrollToMessageId; const targetId = pendingTargetRef.current;
     if (targetId) {
-      if (scrolledRef.current === targetId || loading || messages.length === 0) return;
+      prevMsgCountRef.current = messages.length; if (scrolledRef.current === targetId || loading || messages.length === 0) return;
       const timer = setTimeout(() => {
         const el = document.getElementById(`msg-${targetId}`);
         if (el) {
           el.scrollIntoView({ behavior: "smooth", block: "center" });
           setHighlightedMsgId(targetId);
-          scrolledRef.current = targetId;
+          scrolledRef.current = targetId; pendingTargetRef.current = null;
           setTimeout(() => {
             setHighlightedMsgId(null);
-          }, 1800);
+          }, 2500);
         }
       }, 100);
       return () => clearTimeout(timer);
     } else {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      if (messages.length === prevMsgCountRef.current) return; prevMsgCountRef.current = messages.length; const sc = messagesEndRef.current?.closest(".chat-messages-scroll"); if (sc) sc.scrollTo({ top: sc.scrollHeight, behavior: "smooth" });
     }
   }, [messages, loading, scrollToMessageId, thread?.scrollToMessageId]);
 
@@ -1697,7 +1921,7 @@ export default function ChatView({
       }
       highlightTimeoutRef.current = setTimeout(() => {
         setHighlightedMsgId((curr) => (curr === targetMsgId ? null : curr));
-      }, 1800);
+      }, 2500);
     }
   };
 
@@ -1855,15 +2079,20 @@ export default function ChatView({
     }
   };
 
-  const handleSpeakMessage = (msg) => {
+  const handleSpeakMessage = (msg, textOverride) => {
     if (speakingMsgId === msg.id) {
       stopSpeaking();
       setSpeakingMsgId(null);
       return;
     }
-    const textToSpeak = msg.body_text || msg.subject || "";
-    if (!textToSpeak.trim()) return;
-    speakText(textToSpeak, readAloudLang, {
+    const textToSpeak = (textOverride || msg.body_text || msg.subject || "").trim();
+    if (!textToSpeak) return;
+
+    // Auto-detect the script language from currently displayed text
+    const detectedLangCode = detectScriptLanguage(textToSpeak, lang);
+    const targetVoiceLang = getVoiceLangForCode(detectedLangCode);
+
+    speakText(textToSpeak, targetVoiceLang, {
       onStart: () => setSpeakingMsgId(msg.id),
       onEnd: () => setSpeakingMsgId(null),
       onError: () => setSpeakingMsgId(null),
@@ -1893,9 +2122,11 @@ export default function ChatView({
         isNewMessage: isNew,
         currentSubject: subject,
       });
-      if (data.draft) {
-        setText(data.draft);
-        if (data.subject && !subject) setSubject(data.subject);
+      if (data.body) {
+        setText(data.body);
+        if (data.subject && !subject && isActualSubjectValue(data.subject, data.body, thread?.body_text, thread?.last_message)) {
+          setSubject(data.subject.trim());
+        }
         setShowAssist(false);
       }
     } catch (err) {
@@ -1985,7 +2216,7 @@ export default function ChatView({
       delivery_status: "sent",
       status: "sending",
     };
-    setMessages((prev) => [...prev, optimisticMsg]);
+    setMessages((prev) => [...prev, optimisticMsg]); setSubject("");
 
     setText("");
     setAttachments([]);
@@ -2008,13 +2239,13 @@ export default function ChatView({
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          color: colors.textSecondary,
+          color: "var(--muted)",
           background: colors.surface,
           gap: 12,
         }}
       >
-      <div style={{ fontSize: 48, color: colors.textSecondary, display: "flex", justifyContent: "center" }}>
-          <MailOpen size={52} strokeWidth={1.2} color={colors.textSecondary} />
+      <div style={{ fontSize: 48, color: "var(--muted)", display: "flex", justifyContent: "center" }}>
+          <MessageCircle size={52} strokeWidth={1.2} color="var(--link)" />
         </div>
         <div style={{ fontSize: 16, fontWeight: 600 }}>Select a conversation to start chatting</div>
         <div style={{ fontSize: 13 }}>Or use the compose button to start a new message</div>
@@ -2030,6 +2261,38 @@ export default function ChatView({
 
   const initials = getAvatarInitials(headerDisplayName, isGroup);
   const avatarBg = getAvatarColor(thread.counterpart || thread.group_name);
+
+  const handleContactHeaderClick = async () => {
+    if (isGroup) {
+      setGroupModalOpen(true);
+      return;
+    }
+    const counterpart = thread?.counterpart || "";
+    if (
+      counterpart &&
+      me?.email_address &&
+      counterpart.toLowerCase() === me.email_address.toLowerCase()
+    ) {
+      navigate("/settings/profile");
+      return;
+    }
+
+    setContactModalOpen(true);
+    setContactLoading(true);
+    try {
+      const cleanPhone = (thread?.counterpart_phone || counterpart || "").split("@")[0].replace(/\D/g, "");
+      const { data } = await lookupPhone(cleanPhone || counterpart);
+      setContactProfile(data?.user || data);
+    } catch {
+      setContactProfile({
+        display_name: headerDisplayName,
+        phone: (thread?.counterpart_phone || counterpart || "").split("@")[0],
+        email_address: counterpart,
+      });
+    } finally {
+      setContactLoading(false);
+    }
+  };
 
   // Formal Overlay derived values
   const formalIsOwn = formalOverlayMsg ? (formalOverlayMsg.from_address === me?.email_address) : false;
@@ -2075,10 +2338,13 @@ export default function ChatView({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: isMobile ? "10px 14px" : "10px 20px",
+          height: 68, position: "relative",
+          boxSizing: "border-box",
+          padding: isMobile ? "0 14px" : "0 20px",
           background: colors.surface,
           borderBottom: `1px solid ${colors.border}`,
           zIndex: 10,
+          flexShrink: 0,
         }}
       >
         {selectionMode ? (
@@ -2097,13 +2363,13 @@ export default function ChatView({
                   cursor: "pointer",
                   padding: "6px",
                   borderRadius: 6,
-                  color: colors.danger,
+                  color: "var(--danger)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
-                title="Cancel selection"
-                aria-label="Cancel selection"
+                title={t("cancelSelection") || "Cancel selection"}
+                aria-label={t("cancelSelection") || "Cancel selection"}
               >
                 <X size={20} strokeWidth={2} color={colors.danger} />
               </button>
@@ -2115,7 +2381,7 @@ export default function ChatView({
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <button
                 type="button"
-                className="icon-btn"
+                className="btn-text"
                 onClick={handleBulkStarSelected}
                 disabled={selectedMsgIds.size === 0}
                 style={{
@@ -2124,8 +2390,8 @@ export default function ChatView({
                   gap: 6,
                   padding: "6px 12px",
                   borderRadius: 6,
-                  border: `1px solid ${colors.borderStrong}`,
-                  background: colors.surfaceAlt,
+                  border: "1px solid var(--border-strong)",
+                  background: "var(--raised)",
                   color: colors.textPrimary,
                   cursor: selectedMsgIds.size > 0 ? "pointer" : "default",
                   opacity: selectedMsgIds.size > 0 ? 1 : 0.5,
@@ -2135,13 +2401,13 @@ export default function ChatView({
                 title="Star / unstar selected"
                 aria-label="Star / unstar selected"
               >
-                <Star size={16} strokeWidth={2} color="#d97706" />
+                <Star size={16} strokeWidth={2} color="var(--important)" />
                 <span>Star</span>
               </button>
 
               <button
                 type="button"
-                className="icon-btn icon-btn-danger"
+                className="btn-text icon-btn-danger"
                 onClick={handleBulkDeleteSelected}
                 disabled={selectedMsgIds.size === 0}
                 style={{
@@ -2178,44 +2444,52 @@ export default function ChatView({
                     border: "none",
                     cursor: "pointer",
                     color: colors.textPrimary,
-                    fontSize: 20,
-                    padding: "4px 8px 4px 0",
-                    display: "flex",
+                    padding: 8,
+                    minWidth: 48,
+                    minHeight: 48,
+                    display: "inline-flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    borderRadius: "var(--r-md)",
                   }}
-                  title="Back to conversations"
-                  aria-label="Back to conversations"
+                  title={t("backToConversations") || "Back to conversations"}
+                  aria-label={t("backToConversations") || "Back to conversations"}
                 >
-                  ←
+                  <ArrowLeft size={20} strokeWidth={2} aria-hidden="true" />
                 </button>
               )}
               <div
+                onClick={handleContactHeaderClick}
                 style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  background: avatarBg,
-                  color: "#fff",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 700,
-                  fontSize: 16,
-                  flexShrink: 0,
+                  gap: 12,
+                  minWidth: 0,
+                  cursor: "pointer",
                 }}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleContactHeaderClick(); }}
+                title="View profile"
               >
-                {initials}
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, color: colors.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
-                  {isGroup && <Users size={15} strokeWidth={2} color={colors.textSecondary} />}
-                  {headerDisplayName}
-                </div>
-                <div style={{ fontSize: 12, color: colors.textSecondary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {isGroup
-                    ? `Group · ${(thread.participants || []).length} participants`
-                    : (thread.counterpart_phone ? formatPhoneNumber(thread.counterpart_phone) : thread.counterpart)}
+                <Avatar
+                  src={thread.avatar_url}
+                  name={headerDisplayName}
+                  colorKey={thread.counterpart || thread.group_name}
+                  isGroup={isGroup}
+                  size={40}
+                  fontSize={16}
+                />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: colors.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}>
+                    {isGroup && <Users size={15} strokeWidth={2} color={colors.textSecondary} />}
+                    {headerDisplayName}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {isGroup
+                      ? `Group · ${(thread.participants || []).length} participants`
+                      : (thread.counterpart_phone ? formatPhoneNumber(thread.counterpart_phone) : thread.counterpart)}
+                  </div>
                 </div>
               </div>
             </div>
@@ -2255,11 +2529,12 @@ export default function ChatView({
                     background: "none",
                     cursor: "pointer",
                     padding: "6px",
-                    color: colors.textSecondary,
+                    color: "var(--muted)",
                     display: "flex",
                     alignItems: "center",
                   }}
-                  title={t("moveToTrash")}
+                  title={t("moveToTrash") || "Move to trash"}
+                  aria-label={t("moveToTrash") || "Move to trash"}
                 >
                   <Trash2 size={17} strokeWidth={2} />
                 </button>
@@ -2277,7 +2552,7 @@ export default function ChatView({
             alignItems: "center",
             gap: 8,
             padding: "8px 16px",
-            background: colors.surfaceAlt,
+            background: "var(--raised)",
             borderBottom: `1px solid ${colors.border}`,
             zIndex: 9,
           }}
@@ -2302,7 +2577,7 @@ export default function ChatView({
             style={{
               flex: 1,
               background: colors.surface,
-              border: `1px solid ${colors.borderStrong}`,
+              border: "1px solid var(--border-strong)",
               borderRadius: 6,
               padding: "5px 10px",
               fontSize: 13,
@@ -2311,7 +2586,7 @@ export default function ChatView({
             }}
           />
           {searchQuery.trim() && (
-            <span style={{ fontSize: 12, color: colors.textSecondary, flexShrink: 0, whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: 12, color: "var(--muted)", flexShrink: 0, whiteSpace: "nowrap" }}>
               {searchMatches.length > 0
                 ? `${currentMatchIdx + 1} of ${searchMatches.length}`
                 : (t("noMessagesFound") || "0 matches")}
@@ -2335,8 +2610,8 @@ export default function ChatView({
                 borderRadius: 4,
                 opacity: searchMatches.length > 0 ? 1 : 0.45,
               }}
-              title="Previous match"
-              aria-label="Previous match"
+              title={t("previousMatch") || "Previous match"}
+              aria-label={t("previousMatch") || "Previous match"}
             >
               <ChevronUp size={16} strokeWidth={2} />
             </button>
@@ -2357,8 +2632,8 @@ export default function ChatView({
                 borderRadius: 4,
                 opacity: searchMatches.length > 0 ? 1 : 0.45,
               }}
-              title="Next match"
-              aria-label="Next match"
+              title={t("nextMatch") || "Next match"}
+              aria-label={t("nextMatch") || "Next match"}
             >
               <ChevronDown size={16} strokeWidth={2} />
             </button>
@@ -2373,15 +2648,15 @@ export default function ChatView({
                 border: "none",
                 background: "none",
                 cursor: "pointer",
-                color: colors.danger,
+                color: "var(--danger)",
                 padding: "4px",
                 display: "flex",
                 alignItems: "center",
                 borderRadius: 4,
                 marginLeft: 4,
               }}
-              title="Close search"
-              aria-label="Close search"
+              title={t("closeSearch") || "Close search"}
+              aria-label={t("closeSearch") || "Close search"}
             >
               <X size={16} strokeWidth={2} color={colors.danger} />
             </button>
@@ -2389,113 +2664,239 @@ export default function ChatView({
         </div>
       )}
 
-      {/* ── Scrollable Chat Bubble Stream ──────────────────────────────────── */}
-      <div
-        className="chat-scroll-container"
-        onScroll={handleMessagesScroll}
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: isMobile ? "16px 12px" : "20px 32px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-        }}
-      >
-        {loading && messages.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 40, color: colors.textSecondary }}>
-            Loading conversation…
+      {/* ── Scrollable Chat Bubble Stream (with Wallpaper Layer) ─────────────── */}
+      <div className="chat-messages-wrapper" style={wallpaperUrl ? { backgroundImage: `url("${wallpaperUrl}")`, backgroundSize: `${Math.round(2560 / (window.devicePixelRatio || 1))}px ${Math.round(1440 / (window.devicePixelRatio || 1))}px`, backgroundRepeat: "no-repeat", backgroundPosition: "center" } : undefined}>
+        {/* Wallpaper background — renders only when a wallpaper file is selected */}
+
+
+        <div
+          className="chat-scroll-container chat-messages-scroll"
+          onScroll={handleMessagesScroll}
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: isMobile ? "16px 12px 200px" : "20px 20px 200px",
+          }}
+        >
+          <div
+            style={{
+              maxWidth: 860,
+              width: "100%",
+              margin: "0 auto",
+              display: "flex",
+              flexDirection: "column",
+              minHeight: "100%",
+              justifyContent: messages.length === 0 ? "center" : "flex-start",
+            }}
+          >
+          {loading && messages.length === 0 ? (
+            <div style={{ textAlign: "center", padding: 40, color: colors.textSecondary }}>
+              Loading conversation…
+            </div>
+          ) : null}
+
+          {messages.map((msg, index) => {
+            const isOwn = msg.from_address === me?.email_address;
+            const referencedMsg = msg.in_reply_to ? messagesMap.get(msg.in_reply_to) : null;
+            const prevMsg = index > 0 ? messages[index - 1] : null;
+            const isSameGroup = prevMsg && prevMsg.from_address === msg.from_address;
+            const topGap = isSameGroup ? 6 : 14;
+
+            const msgDate = msg.created_at ? new Date(msg.created_at).toDateString() : null;
+            const prevDate = prevMsg?.created_at ? new Date(prevMsg.created_at).toDateString() : null;
+            const showDateSeparator = Boolean(msgDate && msgDate !== prevDate);
+            const dateLabel = msg.created_at ? new Date(msg.created_at).toLocaleDateString([], {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+              ...(new Date(msg.created_at).getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {})
+            }) : "";
+
+            return (
+              <React.Fragment key={msg.id || index}>
+                {showDateSeparator && (
+                  <div style={{ display: "flex", justifyContent: "center", margin: "16px 0 8px" }}>
+                    <span
+                      style={{
+                        background: "var(--raised)",
+                        borderRadius: 999,
+                        fontSize: 12,
+                        color: "var(--muted)",
+                        padding: "4px 12px",
+                        fontWeight: 500,
+                        userSelect: "none",
+                      }}
+                    >
+                      {dateLabel}
+                    </span>
+                  </div>
+                )}
+                <MessageBubbleItem
+                key={msg.id || index}
+                msg={msg}
+                index={index}
+                isOwn={isOwn}
+                isGroup={isGroup}
+                me={me}
+                colors={colors}
+                isMobile={isMobile}
+                highlightedMsgId={highlightedMsgId}
+                referencedMsg={referencedMsg}
+                activeMenuMsgId={activeMenuMsgId}
+                setActiveMenuMsgId={setActiveMenuMsgId}
+                deletingMsgId={deletingMsgId}
+                setDeletingMsgId={setDeletingMsgId}
+                editingMsgId={editingMsgId}
+                setEditingMsgId={setEditingMsgId}
+                editingText={editingText}
+                setEditingText={setEditingText}
+                copiedMsgId={copiedMsgId}
+                speakingMsgId={speakingMsgId}
+                onReply={(m) => { if (hasMyReply(m)) { setReplyNotice(true); return; }
+                  setReplyingTo(m);
+                  setTimeout(() => textInputRef.current?.focus(), 60);
+                }}
+                onReplyPrivately={onReplyPrivately}
+                onToggleFavorite={handleToggleFavoriteMessage}
+                onSpeak={handleSpeakMessage}
+                onCopy={handleCopyMessage}
+                onSaveEdit={handleSaveEdit}
+                onDelete={handleDeleteMessage}
+                onOpenFormal={handleOpenFormalOverlay}
+                onJumpToMessage={handleJumpToMessage}
+                onPreviewAttachment={setPreviewAttachment}
+                downloadAttachment={downloadAttachment}
+                formatBytes={formatBytes}
+                t={t}
+                selectionMode={selectionMode}
+                isSelected={selectedMsgIds.has(msg.id)}
+                onToggleSelect={handleToggleSelectMsg}
+                onEnterSelection={handleEnterSelection}
+                readAloudLang={readAloudLang}
+                onSelectReadAloudLang={handleSelectReadAloudLang}
+                readAloudMenuMsgId={readAloudMenuMsgId}
+                setReadAloudMenuMsgId={setReadAloudMenuMsgId}
+                voiceWarning={voiceWarning}
+                onTranslationTriggered={handleTranslationTriggered}
+                topGap={showDateSeparator ? 6 : topGap}
+                searchQuery={searchQuery}
+                />
+              </React.Fragment>
+            );
+          })}
+          <div ref={messagesEndRef} />
           </div>
-        ) : null}
-
-        {messages.map((msg, index) => {
-          const isOwn = msg.from_address === me?.email_address;
-          const referencedMsg = msg.in_reply_to ? messagesMap.get(msg.in_reply_to) : null;
-
-          return (
-            <MessageBubbleItem
-              key={msg.id || index}
-              msg={msg}
-              index={index}
-              isOwn={isOwn}
-              isGroup={isGroup}
-              me={me}
-              colors={colors}
-              isMobile={isMobile}
-              highlightedMsgId={highlightedMsgId}
-              referencedMsg={referencedMsg}
-              activeMenuMsgId={activeMenuMsgId}
-              setActiveMenuMsgId={setActiveMenuMsgId}
-              deletingMsgId={deletingMsgId}
-              setDeletingMsgId={setDeletingMsgId}
-              editingMsgId={editingMsgId}
-              setEditingMsgId={setEditingMsgId}
-              editingText={editingText}
-              setEditingText={setEditingText}
-              copiedMsgId={copiedMsgId}
-              speakingMsgId={speakingMsgId}
-              onReply={(m) => {
-                setReplyingTo(m);
-                setTimeout(() => textInputRef.current?.focus(), 60);
-              }}
-              onReplyPrivately={onReplyPrivately}
-              onToggleFavorite={handleToggleFavoriteMessage}
-              onSpeak={handleSpeakMessage}
-              onCopy={handleCopyMessage}
-              onSaveEdit={handleSaveEdit}
-              onDelete={handleDeleteMessage}
-              onOpenFormal={handleOpenFormalOverlay}
-              onJumpToMessage={handleJumpToMessage}
-              onPreviewAttachment={setPreviewAttachment}
-              downloadAttachment={downloadAttachment}
-              formatBytes={formatBytes}
-              t={t}
-              selectionMode={selectionMode}
-              isSelected={selectedMsgIds.has(msg.id)}
-              onToggleSelect={handleToggleSelectMsg}
-              onEnterSelection={handleEnterSelection}
-              readAloudLang={readAloudLang}
-              onSelectReadAloudLang={handleSelectReadAloudLang}
-              readAloudMenuMsgId={readAloudMenuMsgId}
-              setReadAloudMenuMsgId={setReadAloudMenuMsgId}
-              voiceWarning={voiceWarning}
-            />
-          );
-        })}
-        <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* ── Bottom Floating Compose Bar (WhatsApp Style) ────────────────────── */}
       <div
         style={{
           background: "transparent",
-          padding: isMobile ? "0 8px 10px 8px" : "0 20px 16px 20px",
+          padding: 0,
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          pointerEvents: "none",
           display: "flex",
           flexDirection: "column",
-          gap: 6,
+          gap: 0,
           zIndex: 10,
           flexShrink: 0,
         }}
       >
+        {/* Requirement 3: One-time dismissible translation disclaimer notice */}
+        <div style={{ position: "relative", height: 0, width: "100%", maxWidth: 860, margin: "0 auto", pointerEvents: "none" }}>{(
+          <div
+            role="status"
+            aria-live="polite"
+            style={{
+              maxWidth: 860,
+              position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", margin: 0, zIndex: 5, opacity: translationNoticeVisible ? 1 : 0, visibility: translationNoticeVisible ? "visible" : "hidden", pointerEvents: translationNoticeVisible ? "auto" : "none", transition: translationNoticeVisible ? "opacity 200ms ease" : "opacity 200ms ease, visibility 0s linear 200ms",
+              width: "calc(100% - 24px)",
+              boxSizing: "border-box",
+              padding: "6px 12px",
+              borderRadius: 8,
+              background: "var(--raised)",
+              border: "1px solid var(--border)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              fontSize: 11,
+              color: "var(--muted)",
+              boxShadow: "var(--shadow-sm)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+              <Globe size={13} style={{ flexShrink: 0, color: translationNoticeKind === "error" ? "var(--danger)" : "var(--primary)", opacity: 0.85 }} />
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.4 }}>
+                {translationNoticeKind === "error"
+                  ? t("translationFailed")
+                  : translationNoticeKind === "same"
+                  ? t("translationSameLang")
+                  : t("translationDisclaimer")}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (translationNoticeTimerRef.current) {
+                  clearTimeout(translationNoticeTimerRef.current);
+                  translationNoticeTimerRef.current = null;
+                }
+                setTranslationNoticeVisible(false);
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                padding: "2px",
+                cursor: "pointer",
+                color: "var(--muted)",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 4,
+                flexShrink: 0,
+              }}
+              title={t("dismiss") || "Dismiss"}
+              aria-label={t("dismiss") || "Dismiss"}
+            >
+              <X size={13} />
+            </button>
+          </div>
+        )}
+
+        </div>{/* ONE rounded container for the composer (C1 & C2) */}
         <div
+          className="chat-composer-container"
           style={{
-            background: colors.surface,
-            borderRadius: (replyingTo || attachments.length > 0 || showAssist || (!replyingTo && subject)) ? 18 : 28,
-            border: `1px solid ${colors.border}`,
-            boxShadow: "0 4px 18px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.06)",
-            padding: "6px 8px",
+            background: "var(--surface)",
+            borderRadius: "var(--r-lg)",
+            border: "1px solid var(--border-strong)",
+            margin: "8px 12px",
+            paddingBottom: "env(safe-area-inset-bottom, 0px)",
+            boxSizing: "border-box",
             display: "flex",
             flexDirection: "column",
-            gap: 6,
+            overflow: "visible",
+            boxShadow: "var(--shadow-sm)",
             maxWidth: 860,
-            margin: "0 auto",
-            width: "100%",
-            boxSizing: "border-box",
-            transition: "all 0.2s ease",
+            width: "calc(100% - 24px)",
+            alignSelf: "center",
+            pointerEvents: "auto",
+            position: "relative",
+            top: 0,
           }}
         >
+          {(
+            <div role="status" aria-hidden={!replyNotice} style={{ position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)", marginBottom: 8, zIndex: 5, whiteSpace: "nowrap", maxWidth: "calc(100vw - 48px)", overflow: "hidden", textOverflow: "ellipsis", padding: "6px 12px", background: "var(--raised)", color: "var(--muted)", border: "1px solid var(--border)", borderRadius: "var(--r-sm)", boxShadow: "var(--shadow-sm)", fontSize: 12, pointerEvents: "none", opacity: replyNotice ? 1 : 0, transition: "opacity 200ms ease" }}>
+              {t("alreadyReplied")}
+            </div>
+          )}
           {error && (
-            <div style={{ padding: "4px 10px", background: colors.dangerBg, color: colors.danger, borderRadius: 6, fontSize: 12 }}>
+            <div style={{ padding: "4px 10px", background: "var(--danger-bg)", color: "var(--danger)", borderRadius: 6, fontSize: 12, margin: "4px 8px" }}>
               {error}
             </div>
           )}
@@ -2507,20 +2908,20 @@ export default function ChatView({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                padding: "6px 10px",
-                background: colors.surfaceAlt,
-                borderLeft: `3px solid ${colors.accent}`,
-                borderRadius: "4px 8px 8px 4px",
+                padding: "6px 12px",
+                background: "var(--raised)",
+                borderBottom: "1px solid var(--border)",
+                borderLeft: "3px solid var(--primary)",
                 fontSize: 12,
               }}
             >
               <div style={{ flex: 1, overflow: "hidden" }}>
-                <span style={{ fontWeight: 700, color: colors.accent }}>
+                <span style={{ fontWeight: 700, color: "var(--link)" }}>
                   Replying to{" "}
                   {replyingTo.from_name || replyingTo.from_display || formatPhoneNumber(replyingTo.from_address || "User")}
                   :{" "}
                 </span>
-                <span style={{ color: colors.textSecondary }}>
+                <span style={{ color: "var(--muted)" }}>
                   {replyingTo.body_text || replyingTo.subject || "Message"}
                 </span>
               </div>
@@ -2528,44 +2929,51 @@ export default function ChatView({
                 type="button"
                 className="icon-btn icon-btn-danger"
                 onClick={() => setReplyingTo(null)}
-                style={{ background: "none", border: "none", cursor: "pointer", color: colors.danger, padding: "2px", display: "flex", alignItems: "center" }}
-                title="Cancel reply"
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)", padding: "2px", display: "flex", alignItems: "center" }}
+                title={t("cancelReply") || "Cancel reply"}
+                aria-label={t("cancelReply") || "Cancel reply"}
               >
-                <X size={14} color={colors.danger} />
+                <X size={14} color="var(--danger)" />
               </button>
             </div>
           )}
 
-          {/* Compact Subject Field (Shown for non-reply emails, hidden when replying to a message) */}
+          {/* C2: Optional subject row inside container: plain borderless 40px input, 15px font, 1px --border divider under it */}
           {!replyingTo && (
-            <div style={{ display: "flex", alignItems: "center", width: "100%", padding: "0 4px" }}>
+            <div
+              style={{
+                height: 40,
+                minHeight: 40,
+                display: "flex",
+                alignItems: "center",
+                borderBottom: "1px solid var(--border)",
+                padding: "0 12px",
+                boxSizing: "border-box",
+              }}
+            >
               <input
                 type="text"
                 placeholder={t("subjectOptional") || "Subject (optional)"}
                 value={subject}
-                onChange={(e) => setSubject(e.target.value)}
+                onChange={(e) => setSubject(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && text.trim()) { e.preventDefault(); handleSend(); } }}
                 style={{
                   width: "100%",
-                  boxSizing: "border-box",
-                  height: 26,
-                  padding: "2px 8px",
-                  borderRadius: 6,
-                  border: `1px solid ${colors.border}`,
-                  background: colors.surfaceAlt,
-                  fontSize: 12,
-                  color: colors.textPrimary,
+                  height: 40,
+                  border: "none",
                   outline: "none",
-                  transition: "border-color 0.15s ease",
+                  background: "transparent",
+                  fontSize: 15,
+                  color: "var(--text)",
+                  boxSizing: "border-box",
+                  fontFamily: "inherit",
                 }}
-                onFocus={(e) => { e.currentTarget.style.borderColor = colors.borderStrong; }}
-                onBlur={(e) => { e.currentTarget.style.borderColor = colors.border; }}
               />
             </div>
           )}
 
           {/* Attachment Chips */}
           {attachments.length > 0 && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "0 4px" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "6px 12px 0" }}>
               {attachments.map((att, i) => (
                 <div
                   key={att.id || i}
@@ -2575,21 +2983,22 @@ export default function ChatView({
                     gap: 6,
                     padding: "3px 8px",
                     borderRadius: 6,
-                    background: colors.surfaceAlt,
-                    border: `1px solid ${colors.border}`,
+                    background: "var(--raised)",
+                    border: "1px solid var(--border)",
                     fontSize: 12,
                   }}
                 >
-                  <Paperclip size={12} strokeWidth={2} color={colors.textSecondary} />
+                  <Paperclip size={12} strokeWidth={2} color="var(--muted)" />
                   <span>{att.filename || "file"}</span>
                   <button
                     type="button"
                     className="icon-btn icon-btn-danger"
                     onClick={() => removeAttachment(i)}
-                    style={{ background: "none", border: "none", cursor: "pointer", color: colors.danger, padding: "2px", display: "flex", alignItems: "center" }}
-                    title="Remove attachment"
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)", padding: "2px", display: "flex", alignItems: "center" }}
+                    title={t("removeAttachment") || "Remove attachment"}
+                    aria-label={t("removeAttachment") || "Remove attachment"}
                   >
-                    <X size={12} strokeWidth={2} color={colors.danger} />
+                    <X size={12} strokeWidth={2} color="var(--danger)" />
                   </button>
                 </div>
               ))}
@@ -2598,7 +3007,7 @@ export default function ChatView({
 
           {/* AI Assist Intent Chips Drawer */}
           {showAssist && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "4px" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: "6px 12px", borderBottom: "1px solid var(--border)" }}>
               {ASSIST_INTENT_CHIPS.map((chip) => (
                 <button
                   key={chip.id}
@@ -2608,9 +3017,9 @@ export default function ChatView({
                   style={{
                     padding: "4px 10px",
                     borderRadius: 14,
-                    border: `1px solid ${colors.border}`,
-                    background: colors.surfaceAlt,
-                    color: colors.textPrimary,
+                    border: "1px solid var(--border)",
+                    background: "var(--raised)",
+                    color: "var(--text)",
                     fontSize: 12,
                     cursor: "pointer",
                     fontWeight: 500,
@@ -2622,19 +3031,19 @@ export default function ChatView({
             </div>
           )}
 
-          {/* Main Pill Input Row */}
+          {/* C2: Main input row (min-height 48px) */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 4,
-              background: colors.surfaceAlt,
-              borderRadius: 22,
-              padding: "3px 6px",
-              border: `1px solid ${colors.borderStrong || colors.border}`,
+              gap: isNarrow ? 4 : 8,
+              minHeight: 48,
+              padding: "2px 8px",
+              boxSizing: "border-box",
+              position: "relative",
             }}
           >
-            {/* Paperclip File Picker */}
+            {/* Hidden File Picker */}
             <input
               type="file"
               ref={fileInputRef}
@@ -2642,137 +3051,262 @@ export default function ChatView({
               style={{ display: "none" }}
               onChange={handleFileSelect}
             />
-            <button
-              type="button"
-              disabled={uploading}
-              onClick={() => fileInputRef.current?.click()}
-              className="icon-btn"
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: "6px",
-                color: colors.textSecondary,
-                borderRadius: "50%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-              title={t("attachFile")}
-              aria-label={t("attachFile")}
-            >
-              <Paperclip size={18} strokeWidth={2} />
-            </button>
 
-            {/* AI Assist Toggle */}
-            <button
-              type="button"
-              onClick={() => setShowAssist(!showAssist)}
-              className={showAssist ? "" : "icon-btn"}
-              style={{
-                background: showAssist ? colors.accentLight : "none",
-                border: showAssist ? `1px solid ${colors.accent}` : "none",
-                cursor: "pointer",
-                padding: "6px",
-                color: showAssist ? colors.accent : colors.textSecondary,
-                borderRadius: "50%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-              title={t("aiDraftAssistant")}
-              aria-label={t("aiDraftAssistant")}
-            >
-              <Sparkles size={17} strokeWidth={2} />
-            </button>
+            {/* Desktop: Attach button */}
+            {!isNarrow && (
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => fileInputRef.current?.click()}
+                className="icon-btn"
+                title={t("attachFile")}
+                aria-label={t("attachFile")}
+                style={{ color: "var(--muted)" }}
+              >
+                <Paperclip size={18} strokeWidth={2} />
+              </button>
+            )}
 
-            {/* Message Input Textarea */}
+            {isNarrow ? (
+              <>
+                {/* Mobile: "+" popover button */}
+                <div style={{ position: "relative" }}>
+                  <button
+                    ref={plusBtnRef}
+                    type="button"
+                    className="icon-btn"
+                    onClick={() => setShowPlusPopover((prev) => !prev)}
+                    style={{
+                      color: "var(--muted)",
+                      background: showPlusPopover ? "var(--hover)" : "transparent",
+                    }}
+                    title={t("moreOptions") || "More options"}
+                    aria-label={t("moreOptions") || "More options"}
+                    aria-expanded={showPlusPopover}
+                  >
+                    <Plus size={18} strokeWidth={2} />
+                  </button>
+
+                  {showPlusPopover && (
+                    <div
+                      className="themed-menu-scrollbar"
+                      style={{
+                        position: "absolute",
+                        bottom: 50,
+                        left: 0,
+                        background: "var(--surface)",
+                        border: "1px solid var(--border-strong)",
+                        borderRadius: "var(--r-md)",
+                        boxShadow: "var(--shadow-sm)",
+                        padding: "6px",
+                        display: "flex",
+                        flexDirection: "column",
+                        minWidth: 180,
+                        zIndex: 2500,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="menu-item"
+                        onClick={() => {
+                          fileInputRef.current?.click();
+                          setShowPlusPopover(false);
+                        }}
+                      >
+                        <Paperclip size={16} strokeWidth={2} style={{ color: "var(--primary)" }} />
+                        <span>{t("attachFile") || "Attach file"}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="menu-item"
+                        onClick={() => {
+                          setShowAssist(!showAssist);
+                          setShowPlusPopover(false);
+                        }}
+                      >
+                        <Sparkles size={16} strokeWidth={2} style={{ color: "var(--primary)" }} />
+                        <span>{t("aiDraftAssistant") || "AI Assistant"}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Mobile: ComposeIcon button (44px round icon-btn) */}
+                {onOpenTraditionalCompose && (
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    onClick={() => onOpenTraditionalCompose(thread, null, { body: text, subject: subject })}
+                    title={t("openFormalComposer")}
+                    aria-label={t("openFormalComposer")}
+                    style={{ color: "var(--muted)" }}
+                  >
+                    <ComposeIcon size={18} strokeWidth={2} />
+                  </button>
+                )}
+              </>
+            ) : (
+              /* Desktop: show AI assist directly */
+              <button
+                type="button"
+                onClick={() => setShowAssist(!showAssist)}
+                className="icon-btn"
+                style={{
+                  background: showAssist ? "var(--primary-tint)" : "transparent",
+                  color: showAssist ? "var(--link)" : "var(--muted)",
+                }}
+                title={t("aiDraftAssistant")}
+                aria-label={t("aiDraftAssistant")}
+              >
+                <Sparkles size={17} strokeWidth={2} />
+              </button>
+            )}
+
+            {/* C3: Message Input: flex:1; min-width:0; font-size:16px; rows=1 */}
             <textarea
               ref={textInputRef}
               placeholder={isListening ? t("typeMessageListening") : t("typeMessage")}
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                setText(e.target.value);
+                adjustInputHeight();
+              }}
+              onInput={adjustInputHeight}
+              onPaste={() => {
+                setTimeout(adjustInputHeight, 0);
+              }}
               onKeyDown={handleKeyDown}
               rows={1}
+              className="chat-scroll-container"
               style={{
                 flex: 1,
-                padding: "6px 8px",
+                minWidth: 0,
+                padding: "8px 6px",
                 borderRadius: 0,
                 border: "none",
                 background: "transparent",
-                color: colors.textPrimary,
-                fontSize: 14,
+                color: "var(--text)",
+                fontSize: 16,
                 resize: "none",
                 outline: "none",
                 minHeight: 24,
-                maxHeight: 120,
                 lineHeight: 1.4,
                 boxSizing: "border-box",
                 fontFamily: "inherit",
               }}
             />
 
-            {/* Voice Recognition Mic Button with Language Picker */}
-            {isSpeechRecognitionSupported() && (
-              <VoiceLanguageMenu
-                isOpen={showVoiceLangMenu}
-                onClose={() => setShowVoiceLangMenu(false)}
-                value={voiceLang}
-                onSelect={handleSelectVoiceLang}
-                popupOnly
+            {/* Desktop: Compose in traditional (letter) view */}
+            {!isNarrow && onOpenTraditionalCompose && (
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={() => onOpenTraditionalCompose(thread, null, { body: text, subject: subject })}
+                title={t("openFormalComposer")}
+                aria-label={t("openFormalComposer")}
+                style={{ color: "var(--muted)" }}
               >
-                <button
-                  type="button"
-                  onClick={handleVoiceToggle}
-                  className={isListening ? "listening-pulse" : "icon-btn"}
-                  style={{
-                    background: isListening ? colors.danger : "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: "6px",
-                    color: isListening ? "#fff" : colors.textSecondary,
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                  title={isListening ? "Stop listening" : t("voiceToText")}
-                  aria-label={isListening ? "Stop listening" : t("voiceToText")}
-                >
-                  {isListening ? <MicOff size={18} strokeWidth={2} /> : <Mic size={18} strokeWidth={2} />}
-                </button>
-              </VoiceLanguageMenu>
+                <ComposeIcon size={18} strokeWidth={2} />
+              </button>
             )}
 
-            {/* Send Button */}
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={!text.trim() && attachments.length === 0}
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: 17,
-                border: "none",
-                background: (text.trim() || attachments.length > 0) ? colors.accent : "transparent",
-                color: (text.trim() || attachments.length > 0) ? "#fff" : colors.textSecondary,
-                cursor: (text.trim() || attachments.length > 0) ? "pointer" : "default",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-                transition: "all 0.15s ease",
-                opacity: (text.trim() || attachments.length > 0) ? 1 : 0.4,
-              }}
-              title={t("sendMessage")}
-              aria-label={t("sendMessage")}
-            >
-              <Send size={16} strokeWidth={2} />
-            </button>
+            {/* C5: At <=768px: ONE trailing action (mic when empty, send when text exists) */}
+            {isMobile ? (
+              Boolean(text.trim() || attachments.length > 0) ? (
+                <button
+                  type="button"
+                  onClick={handleSend}
+                  className="icon-btn"
+                  style={{
+                    background: "var(--primary)",
+                    color: "var(--on-primary)",
+                    cursor: "pointer",
+                  }}
+                  title={t("sendMessage")}
+                  aria-label={t("sendMessage")}
+                >
+                  <Send size={18} strokeWidth={2} />
+                </button>
+              ) : (
+                isSpeechRecognitionSupported() && (
+                  <VoiceLanguageMenu
+                    isOpen={showVoiceLangMenu}
+                    onClose={() => setShowVoiceLangMenu(false)}
+                    value={voiceLang}
+                    onSelect={handleSelectVoiceLang}
+                    popupOnly
+                  >
+                    <button
+                      type="button"
+                      onClick={handleVoiceToggle}
+                      className="icon-btn"
+                      style={{
+                        background: isListening ? "var(--primary-tint)" : "transparent",
+                        color: isListening ? "var(--primary)" : "var(--muted)",
+                      }}
+                      title={isListening ? (t("stopListening") || "Stop listening") : (t("voiceToText") || "Voice to text")}
+                      aria-label={isListening ? (t("stopListening") || "Stop listening") : (t("voiceToText") || "Voice to text")}
+                    >
+                      {isListening ? <MicOff size={18} strokeWidth={2} /> : <Mic size={18} strokeWidth={2} />}
+                    </button>
+                  </VoiceLanguageMenu>
+                )
+              )
+            ) : (
+              /* Desktop: show both Mic and Send */
+              <>
+                {isSpeechRecognitionSupported() && (
+                  <VoiceLanguageMenu
+                    isOpen={showVoiceLangMenu}
+                    onClose={() => setShowVoiceLangMenu(false)}
+                    value={voiceLang}
+                    onSelect={handleSelectVoiceLang}
+                    popupOnly
+                  >
+                    <button
+                      type="button"
+                      onClick={handleVoiceToggle}
+                      className="icon-btn"
+                      style={{
+                        background: isListening ? "var(--primary-tint)" : "transparent",
+                        color: isListening ? "var(--primary)" : "var(--muted)",
+                      }}
+                      title={isListening ? "Stop listening" : t("voiceToText")}
+                      aria-label={isListening ? "Stop listening" : t("voiceToText")}
+                    >
+                      {isListening ? <MicOff size={18} strokeWidth={2} /> : <Mic size={18} strokeWidth={2} />}
+                    </button>
+                  </VoiceLanguageMenu>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleSend}
+                  disabled={!text.trim() && attachments.length === 0}
+                  className="icon-btn"
+                  style={{
+                    background: (text.trim() || attachments.length > 0) ? "var(--primary)" : "transparent",
+                    color: (text.trim() || attachments.length > 0) ? "var(--on-primary)" : "var(--muted)",
+                    cursor: (text.trim() || attachments.length > 0) ? "pointer" : "default",
+                    opacity: (text.trim() || attachments.length > 0) ? 1 : 0.4,
+                  }}
+                  title={t("sendMessage")}
+                  aria-label={t("sendMessage")}
+                >
+                  <Send size={18} strokeWidth={2} />
+                </button>
+              </>
+            )}
           </div>
+
+          {/* Bracket placeholder resolver pills */}
+          <PlaceholderResolverBar text={text} onChange={setText} />
+        </div>
+
+        {/* C4: Press Enter hint (12px muted, pointer: fine only) */}
+        <div className="press-enter-hint">
+          {t("pressEnterHint") || "Press Enter to send"}
         </div>
       </div>
 
@@ -2784,7 +3318,7 @@ export default function ChatView({
           style={{
             position: "absolute",
             inset: 0,
-            background: "rgba(15, 23, 42, 0.55)",
+            background: "var(--scrim)",
             backdropFilter: "blur(4px)",
             WebkitBackdropFilter: "blur(4px)",
             zIndex: 100,
@@ -2802,9 +3336,9 @@ export default function ChatView({
               maxWidth: 680,
               maxHeight: "92%",
               background: colors.surface,
-              border: `1px solid ${colors.borderStrong}`,
+              border: "1px solid var(--border-strong)",
               borderRadius: 16,
-              boxShadow: "0 20px 50px rgba(0, 0, 0, 0.35)",
+              boxShadow: "var(--shadow-sm)",
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
@@ -2818,7 +3352,7 @@ export default function ChatView({
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "10px 16px",
-                background: colors.surfaceAlt,
+                background: "var(--raised)",
                 borderBottom: `1px solid ${colors.border}`,
                 gap: 8,
               }}
@@ -2832,7 +3366,7 @@ export default function ChatView({
               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                 {formalDeletingConfirm ? (
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 12, color: colors.danger, fontWeight: 500, whiteSpace: "nowrap" }}>
+                    <span style={{ fontSize: 12, color: "var(--danger)", fontWeight: 500, whiteSpace: "nowrap" }}>
                       Delete this message?
                     </span>
                     <button
@@ -2843,12 +3377,12 @@ export default function ChatView({
                         handleCloseFormalOverlay();
                       }}
                       style={{
-                        background: colors.dangerBg,
+                        background: "var(--danger-bg)",
                         border: "none",
                         cursor: "pointer",
                         padding: "4px",
                         borderRadius: 4,
-                        color: colors.danger,
+                        color: "var(--danger)",
                         display: "flex",
                         alignItems: "center",
                       }}
@@ -2862,12 +3396,12 @@ export default function ChatView({
                       className="icon-btn icon-btn-danger"
                       onClick={() => setFormalDeletingConfirm(false)}
                       style={{
-                        background: colors.surfaceAlt,
+                        background: "var(--raised)",
                         border: "none",
                         cursor: "pointer",
                         padding: "4px",
                         borderRadius: 4,
-                        color: colors.danger,
+                        color: "var(--danger)",
                         display: "flex",
                         alignItems: "center",
                       }}
@@ -2884,7 +3418,7 @@ export default function ChatView({
                       type="button"
                       className="icon-btn"
                       onClick={() => {
-                        setReplyingTo(formalOverlayMsg);
+                        if (hasMyReply(formalOverlayMsg)) setReplyNotice(true); else setReplyingTo(formalOverlayMsg);
                         handleCloseFormalOverlay();
                         setTimeout(() => textInputRef.current?.focus(), 80);
                       }}
@@ -2894,7 +3428,7 @@ export default function ChatView({
                         cursor: "pointer",
                         padding: "6px",
                         borderRadius: 6,
-                        color: colors.textSecondary,
+                        color: "var(--muted)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -2920,7 +3454,7 @@ export default function ChatView({
                           cursor: "pointer",
                           padding: "6px",
                           borderRadius: 6,
-                          color: colors.textSecondary,
+                          color: "var(--muted)",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -2928,7 +3462,7 @@ export default function ChatView({
                         title={t("replyPrivate") || "Reply privately in 1:1 chat"}
                         aria-label={t("replyPrivate") || "Reply privately in 1:1 chat"}
                       >
-                        <Reply size={16} strokeWidth={2} style={{ transform: "scaleX(-1)" }} />
+                        <Reply size={16} strokeWidth={2} style={{ transform: "scale(-1, 1)" }} />
                       </button>
                     )}
 
@@ -2948,7 +3482,7 @@ export default function ChatView({
                         cursor: "pointer",
                         padding: "6px",
                         borderRadius: 6,
-                        color: formalOverlayMsg.is_favorite ? "#d97706" : colors.textSecondary,
+                        color: formalOverlayMsg.is_favorite ? "var(--important)" : colors.textSecondary,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -2956,71 +3490,50 @@ export default function ChatView({
                       title={formalOverlayMsg.is_favorite ? t("unmarkImportant") : t("markImportant")}
                       aria-label={formalOverlayMsg.is_favorite ? t("unmarkImportant") : t("markImportant")}
                     >
-                      <Star size={16} strokeWidth={2} fill={formalOverlayMsg.is_favorite ? "#d97706" : "none"} />
+                      <Star size={16} strokeWidth={2} fill={formalOverlayMsg.is_favorite ? "var(--important)" : "none"} />
                     </button>
 
-                    {/* Read Aloud (TTS) with Language Selector */}
+                    {/* Read Aloud (TTS) with auto language detection and animated equalizer */}
                     {isSpeechSynthesisSupported() && (
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          onClick={() => handleSpeakMessage(formalOverlayMsg)}
-                          style={{
-                            background: "none",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: "6px",
-                            borderRadius: 6,
-                            color: speakingMsgId === formalOverlayMsg.id ? colors.accent : colors.textSecondary,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                          title={speakingMsgId === formalOverlayMsg.id ? t("stopReading") : t("readAloud")}
-                          aria-label={speakingMsgId === formalOverlayMsg.id ? t("stopReading") : t("readAloud")}
-                        >
-                          {speakingMsgId === formalOverlayMsg.id ? (
-                            <VolumeX size={16} strokeWidth={2} />
-                          ) : (
-                            <Volume2 size={16} strokeWidth={2} />
-                          )}
-                        </button>
-                        <VoiceLanguageMenu
-                          value={readAloudLang}
-                          onSelect={(code) => handleSelectReadAloudLang(code, formalOverlayMsg)}
-                          isOpen={readAloudMenuMsgId === formalOverlayMsg.id}
-                          onClose={() => setReadAloudMenuMsgId(null)}
-                          popupOnly
-                          menuStyle={{ right: 0, left: "auto", top: "calc(100% + 4px)", bottom: "auto" }}
-                        >
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setReadAloudMenuMsgId(readAloudMenuMsgId === formalOverlayMsg.id ? null : formalOverlayMsg.id);
-                            }}
+                      <button
+                        type="button"
+                        className={`icon-btn ${speakingMsgId === formalOverlayMsg.id ? "speaking-pulse" : ""}`}
+                        onClick={() => handleSpeakMessage(formalOverlayMsg)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: "6px",
+                          borderRadius: 6,
+                          color: speakingMsgId === formalOverlayMsg.id ? colors.accent : colors.textSecondary,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                        title={speakingMsgId === formalOverlayMsg.id ? t("stopReading") : t("readAloud")}
+                        aria-label={speakingMsgId === formalOverlayMsg.id ? t("stopReading") : t("readAloud")}
+                      >
+                        {speakingMsgId === formalOverlayMsg.id ? (
+                          <div
                             style={{
-                              background: colors.surfaceAlt,
-                              border: `1px solid ${colors.borderStrong || colors.border}`,
-                              borderRadius: 12,
-                              padding: "2px 6px",
-                              fontSize: 11,
-                              color: colors.textSecondary,
-                              cursor: "pointer",
-                              display: "flex",
+                              display: "inline-flex",
                               alignItems: "center",
-                              gap: 3,
+                              justifyContent: "center",
+                              gap: 2.5,
+                              height: 16,
+                              width: 16,
+                              flexShrink: 0,
                             }}
-                            title="Choose reading language"
-                            aria-label="Choose reading language"
+                            aria-hidden="true"
                           >
-                            <Globe size={11} strokeWidth={2} />
-                            <span>{VOICE_LANGUAGES.find((l) => l.code === readAloudLang)?.name?.slice(0, 3) || "Eng"}</span>
-                            <ChevronDown size={10} strokeWidth={2} />
-                          </button>
-                        </VoiceLanguageMenu>
-                      </div>
+                            <span className="wave-bar-1" style={{ width: 2.5, minHeight: 6, background: colors.accent, borderRadius: 1.5, display: "inline-block" }} />
+                            <span className="wave-bar-2" style={{ width: 2.5, minHeight: 6, background: colors.accent, borderRadius: 1.5, display: "inline-block" }} />
+                            <span className="wave-bar-3" style={{ width: 2.5, minHeight: 6, background: colors.accent, borderRadius: 1.5, display: "inline-block" }} />
+                          </div>
+                        ) : (
+                          <Volume2 size={16} strokeWidth={2} />
+                        )}
+                      </button>
                     )}
 
                     {/* Copy to Clipboard */}
@@ -3065,7 +3578,7 @@ export default function ChatView({
                           cursor: "pointer",
                           padding: "6px",
                           borderRadius: 6,
-                          color: colors.textSecondary,
+                          color: "var(--muted)",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -3073,7 +3586,7 @@ export default function ChatView({
                         title="Edit message"
                         aria-label="Edit message"
                       >
-                        <Pencil size={16} strokeWidth={2} />
+                        <ComposeIcon size={16} strokeWidth={2} />
                       </button>
                     )}
 
@@ -3089,7 +3602,7 @@ export default function ChatView({
                           cursor: "pointer",
                           padding: "6px",
                           borderRadius: 6,
-                          color: colors.textSecondary,
+                          color: "var(--muted)",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -3114,7 +3627,7 @@ export default function ChatView({
                         cursor: "pointer",
                         padding: "6px",
                         borderRadius: 6,
-                        color: colors.danger,
+                        color: "var(--danger)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -3147,9 +3660,9 @@ export default function ChatView({
                   style={{
                     padding: "6px 12px",
                     borderRadius: 6,
-                    background: colors.surfaceAlt,
+                    background: "var(--raised)",
                     border: `1px solid ${colors.border}`,
-                    color: colors.textSecondary,
+                    color: "var(--muted)",
                     fontSize: 12,
                     display: "flex",
                     alignItems: "center",
@@ -3183,7 +3696,7 @@ export default function ChatView({
                       display: "inline-flex",
                       alignItems: "center",
                       gap: 6,
-                      color: colors.textSecondary,
+                      color: "var(--muted)",
                       opacity: 0.6,
                       fontSize: 14,
                     }}
@@ -3201,34 +3714,24 @@ export default function ChatView({
                   display: "flex",
                   alignItems: "flex-start",
                   gap: 12,
-                  background: colors.surfaceAlt,
+                  background: "var(--raised)",
                   padding: "12px 14px",
                   borderRadius: 10,
                   border: `1px solid ${colors.border}`,
                 }}
               >
-                <div
-                  style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 19,
-                    background: getAvatarColor(formalOverlayMsg.from_address),
-                    color: "#fff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontWeight: 700,
-                    fontSize: 15,
-                    flexShrink: 0,
-                  }}
-                >
-                  {getAvatarInitials(formalSenderName)}
-                </div>
+                <Avatar
+                  src={formalOverlayMsg.from_avatar_url}
+                  name={formalSenderName}
+                  colorKey={formalOverlayMsg.from_address}
+                  size={38}
+                  fontSize={15}
+                />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: colors.textPrimary }}>
                       {formalSenderName}
-                      <span style={{ fontWeight: 400, color: colors.textSecondary, marginLeft: 6, fontSize: 13 }}>
+                      <span style={{ fontWeight: 400, color: "var(--muted)", marginLeft: 6, fontSize: 13 }}>
                         &lt;{formalOverlayMsg.from_address}&gt;
                       </span>
                     </div>
@@ -3236,7 +3739,7 @@ export default function ChatView({
                       {formalFormattedDate}
                     </div>
                   </div>
-                  <div style={{ fontSize: 12, color: colors.textSecondary, marginTop: 4 }}>
+                  <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
                     <span>To: </span>
                     <span style={{ color: colors.textPrimary }}>
                       {formalOverlayMsg.to_address || (thread.is_group ? thread.group_name : (thread.counterpart_name || thread.counterpart))}
@@ -3264,7 +3767,7 @@ export default function ChatView({
                   <div style={{ fontWeight: 700, color: colors.accent, marginBottom: 2 }}>
                     {formalReferencedMsg.from_name || formalReferencedMsg.from_display || formatPhoneNumber(formalReferencedMsg.from_address || "Original Message")}
                   </div>
-                  <div style={{ color: colors.textSecondary, whiteSpace: "pre-wrap" }}>
+                  <div style={{ color: "var(--muted)", whiteSpace: "pre-wrap" }}>
                     {formalReferencedMsg.body_text || formalReferencedMsg.subject || "(Referenced message)"}
                   </div>
                 </div>
@@ -3287,7 +3790,7 @@ export default function ChatView({
               {/* Attachments & Images (Enlarged display) */}
               {formalAttachments.length > 0 && (
                 <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 12 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: colors.textSecondary, display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "var(--muted)", display: "flex", alignItems: "center", gap: 6 }}>
                     <Paperclip size={14} />
                     <span>Attachments ({formalAttachments.length})</span>
                   </div>
@@ -3298,7 +3801,7 @@ export default function ChatView({
                       const isImg = mime.startsWith("image/") || /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(fname);
                       const isPdf = mime === "application/pdf" || /\.pdf$/i.test(fname);
                       const isPreviewable = isImg || isPdf;
-                      const inlineUrl = att.id ? `${BASE_URL}/mail/attachments/${att.id}` : att.url;
+                      const inlineUrl = att.id ? `${BASE_URL}/mail/attachments/${att.id}?token=${encodeURIComponent(localStorage.getItem("phonemail_token") || "")}` : att.url;
 
                       return (
                         <div
@@ -3306,12 +3809,12 @@ export default function ChatView({
                           style={{
                             border: `1px solid ${colors.border}`,
                             borderRadius: 10,
-                            background: colors.surfaceAlt,
+                            background: "var(--raised)",
                             overflow: "hidden",
                           }}
                         >
                           {isImg && inlineUrl && (
-                            <div style={{ background: "rgba(0,0,0,0.03)", padding: 10, display: "flex", justifyContent: "center" }}>
+                            <div style={{ background: "var(--raised)", padding: 10, display: "flex", justifyContent: "center" }}>
                               <img
                                 src={inlineUrl}
                                 alt={fname}
@@ -3348,7 +3851,7 @@ export default function ChatView({
                                 {fname}
                               </span>
                               {att.size && (
-                                <span style={{ fontSize: 12, color: colors.textSecondary, flexShrink: 0 }}>
+                                <span style={{ fontSize: 12, color: "var(--muted)", flexShrink: 0 }}>
                                   {formatBytes(att.size)}
                                 </span>
                               )}
@@ -3370,7 +3873,7 @@ export default function ChatView({
                                     padding: "6px 12px",
                                     borderRadius: 6,
                                     background: colors.accentLight,
-                                    border: `1px solid ${colors.borderStrong}`,
+                                    border: "1px solid var(--border-strong)",
                                     color: colors.accent,
                                     fontSize: 12,
                                     fontWeight: 600,
@@ -3393,7 +3896,7 @@ export default function ChatView({
                                     padding: "6px 12px",
                                     borderRadius: 6,
                                     background: colors.surface,
-                                    border: `1px solid ${colors.borderStrong}`,
+                                    border: "1px solid var(--border-strong)",
                                     color: isPreviewable ? colors.textSecondary : colors.accent,
                                     fontSize: 12,
                                     fontWeight: 600,
@@ -3419,17 +3922,15 @@ export default function ChatView({
       )}
 
       {/* Lightbox / Modal for Attachment Viewing (Images & PDFs) */}
-      {previewAttachment && (
-        <div
-          onClick={(e) => {
+      {previewAttachment && typeof document !== "undefined" && createPortal(<div onClick={(e) => {
             if (e.target === e.currentTarget) setPreviewAttachment(null);
           }}
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0, 0, 0, 0.78)",
+            background: "var(--scrim)",
             backdropFilter: "blur(4px)",
-            zIndex: 3000,
+            zIndex: 9000, boxSizing: "border-box", overflow: "hidden",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -3441,23 +3942,23 @@ export default function ChatView({
           <div
             style={{
               width: "100%",
-              maxWidth: previewAttachment.type === "pdf" ? 920 : "90vw",
+              maxWidth: previewAttachment.type === "pdf" ? 920 : "90vw", flexShrink: 0,
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
               marginBottom: 12,
-              gap: 12,
+              gap: 12, ...(previewAttachment.type === "pdf" ? { position: "fixed", top: 112, right: 16, width: "auto", maxWidth: "40vw", marginBottom: 0, zIndex: 9100, flexDirection: "column", alignItems: "flex-end" } : {}),
             }}
           >
             <span
               style={{
-                color: "#ffffff",
+                color: "var(--on-primary)",
                 fontSize: 14,
                 fontWeight: 600,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
-                textShadow: "0 1px 3px rgba(0,0,0,0.5)",
+                textShadow: "none",
               }}
             >
               {previewAttachment.filename}
@@ -3472,9 +3973,9 @@ export default function ChatView({
                   gap: 6,
                   padding: "6px 12px",
                   borderRadius: 6,
-                  background: "rgba(255, 255, 255, 0.18)",
-                  border: "1px solid rgba(255, 255, 255, 0.35)",
-                  color: "#ffffff",
+                  background: "var(--primary)",
+                  border: "1px solid var(--primary)",
+                  color: "var(--on-primary)",
                   fontSize: 12,
                   fontWeight: 600,
                   cursor: "pointer",
@@ -3495,9 +3996,9 @@ export default function ChatView({
                   width: 32,
                   height: 32,
                   borderRadius: 16,
-                  background: "rgba(255, 255, 255, 0.18)",
-                  border: "1px solid rgba(255, 255, 255, 0.35)",
-                  color: colors.danger,
+                  background: "var(--overlay)",
+                  border: "1px solid var(--border)",
+                  color: "var(--danger)",
                   cursor: "pointer",
                 }}
                 title="Close"
@@ -3510,13 +4011,13 @@ export default function ChatView({
 
           {/* Viewer Content */}
           <div
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { if (e.target === e.currentTarget) setPreviewAttachment(null); }}
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               maxWidth: "100%",
-              maxHeight: "calc(100vh - 80px)",
+              maxHeight: "100%", minHeight: 0, ...(previewAttachment.type === "pdf" ? { flex: 1, width: "100%" } : {}), ...(previewAttachment.type === "image" ? { padding: 12, background: "var(--overlay)", border: "1px solid var(--border)", borderRadius: 12, backdropFilter: "blur(6px)" } : {}),
             }}
           >
             {previewAttachment.type === "image" ? (
@@ -3525,10 +4026,10 @@ export default function ChatView({
                 alt={previewAttachment.filename}
                 style={{
                   maxWidth: "90vw",
-                  maxHeight: "82vh",
+                  maxHeight: "74vh",
                   objectFit: "contain",
                   borderRadius: 8,
-                  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.6)",
+                  boxShadow: "var(--shadow-sm)",
                 }}
               />
             ) : previewAttachment.type === "pdf" ? (
@@ -3538,16 +4039,150 @@ export default function ChatView({
                 style={{
                   width: "90vw",
                   maxWidth: 920,
-                  height: "82vh",
+                  height: "100%",
                   border: "none",
                   borderRadius: 8,
-                  background: "#ffffff",
-                  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.6)",
+                  background: "var(--surface)",
+                  boxShadow: "var(--shadow-sm)",
                 }}
               />
             ) : null}
           </div>
-        </div>
+        </div>, document.body)}
+
+      {/* Contact Profile Modal (Item 8) */}
+      {contactModalOpen && typeof document !== "undefined" && createPortal(
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "var(--scrim)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          className="formal-overlay-backdrop"
+          onClick={() => setContactModalOpen(false)}
+        >
+          <div
+            className="formal-overlay-card"
+            style={{
+              background: colors.surface,
+              borderRadius: 16,
+              border: `1px solid ${colors.border}`,
+              padding: 24,
+              maxWidth: 380,
+              width: "100%",
+              boxShadow: "var(--shadow-sm)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 16,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {contactLoading ? (
+              <div style={{ textAlign: "center", padding: 30, color: colors.textSecondary }}>
+                Loading profile…
+              </div>
+            ) : (
+              <>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+                  <Avatar
+                    src={contactProfile?.avatar_url || thread.avatar_url}
+                    name={contactProfile?.display_name || headerDisplayName}
+                    colorKey={thread.counterpart || thread.group_name}
+                    size={64}
+                    fontSize={24}
+                  />
+                  <div style={{ textAlign: "center" }}>
+                    <h3 style={{ margin: "0 0 4px", fontSize: 18, color: colors.textPrimary }}>
+                      {contactProfile?.display_name || headerDisplayName}
+                    </h3>
+                    {Boolean(contactProfile?.phone) && (
+                      <p style={{ margin: 0, fontSize: 13, color: colors.textSecondary }}>
+                        {formatPhoneNumber(contactProfile.phone)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    borderTop: `1px solid ${colors.border}`,
+                    borderBottom: `1px solid ${colors.border}`,
+                    padding: "12px 0",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                    <span style={{ color: "var(--muted)", fontWeight: 500 }}>Email:</span>
+                    <span style={{ color: colors.textPrimary, wordBreak: "break-all" }}>
+                      {contactProfile?.email_address || thread?.counterpart || "No email"}
+                    </span>
+                  </div>
+
+                  {Array.isArray(contactProfile?.aliases) && contactProfile.aliases.length > 0 && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: colors.textSecondary }}>
+                        Aliases:
+                      </span>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {contactProfile.aliases.map((al) => (
+                          <span
+                            key={al}
+                            style={{
+                              background: "var(--raised)",
+                              border: `1px solid ${colors.border}`,
+                              borderRadius: 12,
+                              padding: "2px 8px",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              color: colors.textAccent,
+                            }}
+                          >
+                            @{al}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setContactModalOpen(false)}
+                  style={{
+                    background: colors.accent,
+                    color: "var(--on-primary)",
+                    border: "none",
+                    borderRadius: 8,
+                    padding: "9px 16px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    alignSelf: "center",
+                    width: "100%",
+                  }}
+                >
+                  Close
+                </button>
+              </>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {groupModalOpen && (
+        <GroupInfoModal
+          thread={thread}
+          me={me}
+          onClose={() => setGroupModalOpen(false)}
+          onUpdated={(patch) => onThreadUpdated && onThreadUpdated(thread.id, patch)}
+        />
       )}
     </div>
   );

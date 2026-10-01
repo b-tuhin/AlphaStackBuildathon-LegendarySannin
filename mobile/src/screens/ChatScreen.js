@@ -11,6 +11,7 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
@@ -21,7 +22,7 @@ import { spacing } from "../theme/whatsapp";
 import ChatBubble from "../components/ChatBubble";
 import SwipeReplyWrapper from "../components/SwipeReplyWrapper";
 import TraditionalEmailModal from "../components/TraditionalEmailModal";
-import { getThreadMessages, sendMail, getMe, uploadAttachment, assistDraft, updateEmail } from "../api/client";
+import { getThreadMessages, sendMail, getMe, uploadAttachment, assistDraft, updateEmail, lookupPhone } from "../api/client";
 import {
   VOICE_LANGUAGES,
   getSavedVoiceLang,
@@ -29,7 +30,7 @@ import {
   startVoiceRecognition,
 } from "../utils/speech";
 import LanguagePickerModal from "../components/LanguagePickerModal";
-import { formatPhoneNumber } from "../utils/contact";
+import { formatPhoneNumber, getAvatarInitials, getAvatarColor } from "../utils/contact";
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 const OFFLINE_QUEUE_KEY = "phonemail_mobile_chat_queue";
@@ -57,9 +58,57 @@ export default function ChatScreen({ route, navigation }) {
   const [uploading, setUploading]         = useState(false);
   const [myAddress, setMyAddress]         = useState("");
   const [undoToast, setUndoToast]         = useState(null); // { tempId, payload, secondsLeft, timerId }
+  const isGroup = Boolean(thread?.is_group);
+  const counterpartName = isGroup
+    ? (thread?.group_name || thread?.counterpart || t("groupConversation") || "Group")
+    : (thread?.counterpart_name || formatPhoneNumber(thread?.counterpart || ""));
+  const counterpartInitials = getAvatarInitials(counterpartName, isGroup);
+  const counterpartAvatarBg = getAvatarColor(thread?.counterpart || thread?.group_name || "contact");
+  const counterpartSubtitle = isGroup
+    ? (thread?.participants ? `${thread.participants.split(",").length} participants` : "")
+    : (thread?.counterpart ? formatPhoneNumber(thread.counterpart) : "");
+
+  // Contact Profile Modal state (Item 8)
+  const [contactModalVisible, setContactModalVisible] = useState(false);
+  const [contactProfile, setContactProfile]           = useState(null);
+  const [contactLoading, setContactLoading]           = useState(false);
+
+  const handlePressContact = async () => {
+    // If own profile, route directly to Profile screen
+    const rawCounterpart = thread?.counterpart || "";
+    if (rawCounterpart && myAddress && rawCounterpart.toLowerCase() === myAddress.toLowerCase()) {
+      navigation.navigate("Profile");
+      return;
+    }
+
+    // Otherwise open contact modal/sheet via lookup
+    setContactModalVisible(true);
+    setContactLoading(true);
+    try {
+      const cleanPhone = (thread?.counterpart || "").split("@")[0].replace(/\D/g, "");
+      const { data } = await lookupPhone(cleanPhone || thread?.counterpart);
+      setContactProfile(data?.user || data);
+    } catch {
+      setContactProfile({
+        display_name: counterpartName,
+        phone: (thread?.counterpart || "").split("@")[0],
+        email_address: thread?.counterpart,
+      });
+    } finally {
+      setContactLoading(false);
+    }
+  };
+
+  const [inputHeight, setInputHeight]     = useState(40);
   const listRef                           = useRef(null);
   const textInputRef                      = useRef(null);
   const undoIntervalRef                   = useRef(null);
+
+  useEffect(() => {
+    if (!text) {
+      setInputHeight(40);
+    }
+  }, [text]);
 
   // ── Voice-to-Text State ───────────────────────────────────────────────────
   const [voiceLang, setVoiceLang]                 = useState("en-IN");
@@ -479,6 +528,37 @@ export default function ChatScreen({ route, navigation }) {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        {/* Dedicated In-Chat Top Bar (§7, §8) */}
+        <View style={[styles.topBar, { backgroundColor: colors.card || colors.surface, borderBottomColor: colors.border }]}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={styles.backBtn}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.topBarContact}
+            activeOpacity={0.7}
+            onPress={handlePressContact}
+          >
+            <View style={[styles.topBarAvatar, { backgroundColor: counterpartAvatarBg }]}>
+              <Text style={styles.topBarAvatarText}>{counterpartInitials}</Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.topBarTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                {counterpartName}
+              </Text>
+              {Boolean(counterpartSubtitle) && (
+                <Text style={[styles.topBarSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {counterpartSubtitle}
+                </Text>
+              )}
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {/* Skeleton loading state */}
         {loading ? (
           <View style={styles.skeletonContainer}>
@@ -740,12 +820,25 @@ export default function ChatScreen({ route, navigation }) {
           {/* Message Input Box */}
           <TextInput
             ref={textInputRef}
-            style={[styles.input, { backgroundColor: colors.chipInactive, color: colors.textPrimary, borderColor: colors.border }]}
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.chipInactive,
+                color: colors.textPrimary,
+                borderColor: colors.border,
+                height: Math.min(160, Math.max(40, inputHeight)),
+              },
+            ]}
             placeholder={replyingTo ? t("typeReply") : t("typeMessage")}
             placeholderTextColor={colors.textSecondary}
             value={text}
             onChangeText={setText}
+            onContentSizeChange={(e) => {
+              const h = e.nativeEvent?.contentSize?.height;
+              if (h) setInputHeight(Math.max(40, h + 10));
+            }}
             multiline
+            scrollEnabled={inputHeight >= 160}
           />
 
           {/* Send Button (Spike minimal blue circle) */}
@@ -779,6 +872,69 @@ export default function ChatScreen({ route, navigation }) {
           onClose={() => setLangPickerVisible(false)}
           title="Select Voice-to-Text Language"
         />
+
+        {/* Contact Profile Modal (Item 8) */}
+        <Modal
+          visible={contactModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setContactModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.contactCard, { backgroundColor: colors.surface || colors.card, borderColor: colors.border }]}>
+              {contactLoading ? (
+                <ActivityIndicator size="large" color={colors.accent || colors.primaryLight} style={{ marginVertical: 30 }} />
+              ) : (
+                <>
+                  <View style={{ alignItems: "center", marginBottom: 16 }}>
+                    <View style={[styles.largeAvatar, { backgroundColor: counterpartAvatarBg }]}>
+                      <Text style={styles.largeAvatarText}>{counterpartInitials}</Text>
+                    </View>
+                    <Text style={[styles.contactModalName, { color: colors.textPrimary }]}>
+                      {contactProfile?.display_name || counterpartName}
+                    </Text>
+                    {Boolean(contactProfile?.phone) && (
+                      <Text style={[styles.contactModalPhone, { color: colors.textSecondary }]}>
+                        {formatPhoneNumber(contactProfile.phone)}
+                      </Text>
+                    )}
+                  </View>
+
+                  <View style={[styles.contactSection, { borderTopColor: colors.border, borderBottomColor: colors.border }]}>
+                    <View style={styles.contactRow}>
+                      <Ionicons name="mail-outline" size={16} color={colors.textSecondary} style={{ marginRight: 8 }} />
+                      <Text style={[styles.contactRowText, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {contactProfile?.email_address || thread?.counterpart || "No email"}
+                      </Text>
+                    </View>
+
+                    {Array.isArray(contactProfile?.aliases) && contactProfile.aliases.length > 0 && (
+                      <View style={{ marginTop: 10 }}>
+                        <Text style={{ fontSize: 12, fontWeight: "600", color: colors.textSecondary, marginBottom: 6 }}>
+                          Aliases
+                        </Text>
+                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                          {contactProfile.aliases.map((al) => (
+                            <View key={al} style={[styles.aliasBadge, { backgroundColor: colors.chipInactive, borderColor: colors.border }]}>
+                              <Text style={[styles.aliasText, { color: colors.textPrimary }]}>@{al}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.closeModalBtn, { backgroundColor: colors.primaryLight || colors.accent }]}
+                    onPress={() => setContactModalVisible(false)}
+                  >
+                    <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>Close</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </KeyboardAvoidingView>
   );
@@ -918,7 +1074,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    maxHeight: 90,
+    maxHeight: 160,
     fontSize: 14.5,
     marginRight: spacing.sm,
   },
@@ -1024,5 +1180,116 @@ const styles = StyleSheet.create({
   assistChipHighlightText: {
     fontSize: 11.5,
     fontWeight: "600",
+  },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    gap: 8,
+  },
+  backBtn: {
+    padding: 6,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  topBarContact: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  topBarAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  topBarAvatarText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  topBarTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  topBarSubtitle: {
+    fontSize: 11.5,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  contactCard: {
+    width: "100%",
+    maxWidth: 340,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  largeAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  largeAvatarText: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "700",
+  },
+  contactModalName: {
+    fontSize: 18,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  contactModalPhone: {
+    fontSize: 13,
+    marginTop: 2,
+    textAlign: "center",
+  },
+  contactSection: {
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    paddingVertical: 12,
+    marginVertical: 12,
+  },
+  contactRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  contactRowText: {
+    fontSize: 13,
+    flex: 1,
+  },
+  aliasBadge: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  aliasText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  closeModalBtn: {
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
   },
 });

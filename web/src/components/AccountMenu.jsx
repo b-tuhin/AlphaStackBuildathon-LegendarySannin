@@ -1,53 +1,14 @@
+import { EMAIL_DOMAIN } from "../config/brand.js";
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { X, LogOut } from "lucide-react";
+import { X, LogOut, User } from "lucide-react";
 import { updateMe, addAlias, clearToken } from "../api/client.js";
 import { useTheme } from "../theme/ThemeContext.jsx";
 import { useI18n } from "../i18n/I18nContext.jsx";
 import { getAvatarInitials, getAvatarColor } from "../utils/contact.js";
 import ThemedSelect from "./ThemedSelect.jsx";
+import ThemeToggle from "./ThemeToggle.jsx";
 
-function ToggleSwitch({ on, onToggle, colors }) {
-  return (
-    <div
-      role="switch"
-      aria-checked={on}
-      tabIndex={0}
-      onClick={onToggle}
-      onKeyDown={(e) => {
-        if (e.key === " " || e.key === "Enter") { e.preventDefault(); onToggle(); }
-      }}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        width: 44,
-        height: 24,
-        borderRadius: 12,
-        background: on ? colors.switchTrackOn : colors.switchTrackOff,
-        cursor: "pointer",
-        transition: "background 0.2s",
-        padding: 2,
-        boxSizing: "border-box",
-        flexShrink: 0,
-        outline: "none",
-      }}
-    >
-      <span
-        style={{
-          display: "block",
-          width: 20,
-          height: 20,
-          borderRadius: "50%",
-          background: colors.switchKnob,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-          transform: on ? "translateX(20px)" : "translateX(0)",
-          transition: "transform 0.2s",
-          flexShrink: 0,
-        }}
-      />
-    </div>
-  );
-}
 
 export default function AccountMenu({ me, isOpen, onClose, onUpdated }) {
   const { colors, isDark, toggleTheme } = useTheme();
@@ -68,7 +29,16 @@ export default function AccountMenu({ me, isOpen, onClose, onUpdated }) {
 
   useEffect(() => {
     function handleClickOutside(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) onClose();
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(e.target) &&
+        !e.target.closest?.('[data-themed-select-menu="true"]') &&
+        !e.target.closest?.('.themed-menu-scrollbar') &&
+        !e.target.closest?.('[role="listbox"]') &&
+        !e.target.closest?.('[role="option"]')
+      ) {
+        onClose();
+      }
     }
     if (isOpen) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -104,8 +74,8 @@ export default function AccountMenu({ me, isOpen, onClose, onUpdated }) {
   };
 
   const handleLangChange = (val) => {
-    const code = typeof val === "object" ? val.target.value : val;
-    setLang(code);
+    const code = typeof val === "object" ? (val.target?.value ?? val.value) : val;
+    if (code) setLang(code);
   };
 
   const handleLogout = () => {
@@ -150,7 +120,7 @@ export default function AccountMenu({ me, isOpen, onClose, onUpdated }) {
         background: colors.surface,
         border: `1px solid ${colors.border}`,
         borderRadius: 12,
-        boxShadow: "0 4px 24px rgba(0,0,0,0.14)",
+        boxShadow: "var(--shadow-sm)",
         zIndex: 1100,
         overflow: "hidden",
         color: colors.textPrimary,
@@ -173,7 +143,7 @@ export default function AccountMenu({ me, isOpen, onClose, onUpdated }) {
             height: 48,
             borderRadius: 24,
             background: avatarColor,
-            color: "#fff",
+            color: "var(--on-primary)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -202,7 +172,7 @@ export default function AccountMenu({ me, isOpen, onClose, onUpdated }) {
         </button>
       </div>
 
-      <div style={{ padding: 20, maxHeight: 440, overflowY: "auto", display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="themed-menu-scrollbar" style={{ padding: 20, maxHeight: 440, overflowY: "auto", display: "flex", flexDirection: "column", gap: 16 }}>
         {savedMsg && (
           <div style={{ padding: "8px 12px", background: colors.successBg, color: colors.success, borderRadius: 6, fontSize: 13, fontWeight: 600 }}>
             {savedMsg}
@@ -217,29 +187,45 @@ export default function AccountMenu({ me, isOpen, onClose, onUpdated }) {
         {/* Display Name Edit */}
         <div>
           <label style={sectionLabelStyle}>{t("displayName")}</label>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Your Name"
-              style={inputStyle}
+              aria-label={t("displayName") || "Display Name"}
+              style={{
+                ...inputStyle,
+                minHeight: 48,
+                padding: "0 12px",
+                boxSizing: "border-box",
+              }}
             />
             <button
               type="button"
+              className="btn-primary"
               onClick={handleSaveName}
+              aria-label={t("save") || "Save"}
               style={{
-                padding: "8px 14px",
+                minHeight: 48,
+                minWidth: 80,
+                boxSizing: "border-box",
                 borderRadius: 8,
                 border: "none",
-                background: colors.accent,
-                color: "#fff",
+                background: "var(--c-navy)",
+                color: "var(--on-primary)",
                 fontWeight: 600,
-                fontSize: 13,
+                fontSize: 14,
                 cursor: "pointer",
+                padding: "0 16px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
             >
-              {t("save")}
+              {t("save") || "Save"}
             </button>
           </div>
         </div>
@@ -261,7 +247,7 @@ export default function AccountMenu({ me, isOpen, onClose, onUpdated }) {
                     border: `1px solid ${colors.border}`,
                   }}
                 >
-                  {a}@phonemail.com
+                  {a}@{EMAIL_DOMAIN}
                 </span>
               ))}
             </div>
@@ -319,11 +305,42 @@ export default function AccountMenu({ me, isOpen, onClose, onUpdated }) {
             <div style={{ fontWeight: 600, fontSize: 14 }}>{t("darkMode")}</div>
             <div style={{ fontSize: 12, color: colors.textSecondary }}>{t("darkModeDesc")}</div>
           </div>
-          <ToggleSwitch on={isDark} onToggle={toggleTheme} colors={colors} />
+          <ThemeToggle id="account-menu-theme-toggle" />
+        </div>
+
+        {/* View Full Profile link (§7) */}
+        <div style={{ paddingTop: 8, borderTop: `1px solid ${colors.border}` }}>
+          <button
+            type="button"
+            className="btn-text"
+            onClick={() => {
+              onClose();
+              navigate("/settings");
+            }}
+            style={{
+              width: "100%",
+              padding: "9px 12px",
+              borderRadius: 8,
+              border: `1px solid ${colors.border}`,
+              background: colors.surfaceAlt,
+              color: colors.textPrimary,
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              marginBottom: 8,
+            }}
+          >
+            <User size={15} strokeWidth={2} color={colors.accent} />
+            <span>{t("viewFullProfile") || "View full profile"}</span>
+          </button>
         </div>
 
         {/* Logout Button */}
-        <div style={{ paddingTop: 8, borderTop: `1px solid ${colors.border}` }}>
+        <div>
           <button
             type="button"
             onClick={handleLogout}

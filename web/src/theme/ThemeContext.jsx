@@ -1,151 +1,160 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 /**
- * Calm, trustworthy palette — muted blue/slate/green tones.
- * WCAG AA compliant contrast ratios throughout.
+ * All colours are defined in src/theme/tokens.css.
+ * The JS colors object maps component prop names to CSS variable references.
+ * Components should use colors.X in inline styles; CSS rules use var(--token).
  */
-export const lightColors = {
-  // ── Surfaces ────────────────────────────────────────────────────────────────
-  bg:            "#f0f2f5",       // page canvas — cool off-white
-  surface:       "#ffffff",       // panels, cards, modals
-  surfaceAlt:    "#f4f6f9",       // input fills, chip backgrounds
-  surfaceHover:  "#e8eef7",       // row hover / highlight
-  border:        "#d9dde8",       // dividers
-  borderStrong:  "#b8c0d0",       // input borders, focused ring
+const TOKEN_COLORS = {
+  // Surfaces
+  bg:             "var(--bg)",
+  surface:        "var(--surface)",
+  surfaceRaised:  "var(--raised)",
+  surfaceAlt:     "var(--raised)",
+  surfaceHover:   "var(--hover)",
+  raised:         "var(--raised)",
+  hover:          "var(--hover)",
 
-  // ── Typography ──────────────────────────────────────────────────────────────
-  textPrimary:   "#1a2030",       // near-black slate — 12:1 contrast on white
-  textSecondary: "#5a677d",       // secondary labels — 4.8:1 on white
-  textMuted:     "#3d4a5c",       // medium-emphasis
-  textAccent:    "#1d4ed8",       // interactive text links
+  // Borders
+  border:         "var(--border)",
+  borderStrong:   "var(--border-strong)",
 
-  // ── Brand / interactive ─────────────────────────────────────────────────────
-  accent:        "#2563eb",       // primary action — 5.0:1 on white (pass)
-  accentLight:   "#dbeafe",       // selected row bg, chip active bg
-  accentChip:    "#bfdbfe",       // chip active
-  accentChipFg:  "#1e3a8a",       // chip active text
+  // Typography
+  textPrimary:    "var(--text)",
+  textSecondary:  "var(--muted)",
+  textMuted:      "var(--muted)",
+  textAccent:     "var(--link)",
+  text:           "var(--text)",
+  muted:          "var(--muted)",
+  link:           "var(--link)",
 
-  // ── Status ───────────────────────────────────────────────────────────────────
-  danger:        "#b91c1c",       // error text — 7.1:1 on white (pass)
-  dangerBg:      "#fee2e2",
-  success:       "#15803d",       // success text — 5.5:1 (pass)
-  successBg:     "#dcfce7",
-  warningFg:     "#b45309",
+  // Brand / interactive
+  primary:        "var(--primary)",
+  accent:         "var(--primary)",
+  accentLight:    "var(--primary-tint)",
+  accentChip:     "var(--raised)",
+  accentChipFg:   "var(--link)",
+  navyMark:       "var(--primary)",
+  onPrimary:      "var(--on-primary)",
+  switchTrackOn:  "var(--primary)",
+  switchTrackOff: "var(--border-strong)",
+  switchKnob:     "var(--on-primary)",
 
-  // ── Switches ──────────────────────────────────────────────────────────────────
-  switchTrackOn:  "#2563eb",
-  switchTrackOff: "#94a3b8",
-  switchKnob:     "#ffffff",
+  // Status
+  danger:         "var(--danger)",
+  dangerBg:       "var(--danger-bg)",
+  success:        "var(--success)",
+  successBg:      "var(--success-bg)",
+  warningFg:      "var(--muted)",
+  warningBg:      "var(--raised)",
+  important:      "var(--important)",
 
-  // ── Chat bubbles ─────────────────────────────────────────────────────────────
-  bubbleOut:            "#dbeafe",     // outgoing — soft blue
-  bubbleIn:             "#ffffff",     // incoming — white
-  bubbleBorderOut:      "#bfdbfe",
-  bubbleBorderIn:       "#d9dde8",
-  quoteBackground:      "#f4f6f9",
-  quoteBorder:          "#2563eb",
-  favoriteBubbleBg:     "#fffbeb",     // subtle warm amber tint
-  favoriteBubbleBorder: "#fde68a",     // warm amber border
-  favoriteBubbleGlow:   "0 2px 8px rgba(217, 119, 6, 0.12)",
-  highlightBg:          "#fef3c7",     // calm muted amber highlight
-  highlightBorder:      "#f59e0b",
-  highlightGlow:        "0 0 0 3px rgba(245, 158, 11, 0.25), 0 4px 12px rgba(0, 0, 0, 0.08)",
+  // Chat bubbles
+  bubbleOut:            "var(--sent)",
+  bubbleIn:             "var(--received)",
+  bubbleBorderOut:      "var(--border)",
+  bubbleBorderIn:       "var(--border)",
+  quoteBackground:      "var(--primary-tint)",
+  quoteBorder:          "var(--primary)",
+  favoriteBubbleBg:     "var(--raised)",
+  favoriteBubbleBorder: "var(--border)",
+  favoriteBubbleGlow:   "var(--shadow-sm)",
+  highlightBg:          "var(--primary-tint)",
+  highlightBorder:      "var(--primary)",
+  highlightGlow:        "var(--highlight-glow)",
+
+  // Avatar
+  avatarBg:       "var(--avatar-bg)",
+  avatarFg:       "var(--avatar-fg)",
 };
 
-export const darkColors = {
-  bg:            "#0f1520",
-  surface:       "#1a2236",
-  surfaceAlt:    "#232d42",
-  surfaceHover:  "#1e2d4f",
-  border:        "#2a3550",
-  borderStrong:  "#374463",
+// Both themes return identical var() references — tokens.css handles the switch
+export const lightColors = TOKEN_COLORS;
+export const darkColors  = TOKEN_COLORS;
 
-  textPrimary:   "#e2e8f4",       // 12:1 on #1a2236 (pass)
-  textSecondary: "#8a9ab8",       // 4.5:1 (pass)
-  textMuted:     "#aab4cc",
-  textAccent:    "#93b4fa",
-
-  accent:        "#6090f5",       // 4.5:1 on dark surface (pass)
-  accentLight:   "#1e2d4f",
-  accentChip:    "#1e3460",
-  accentChipFg:  "#bfdbfe",
-
-  danger:        "#f87171",
-  dangerBg:      "#3b1c1c",
-  success:       "#86efac",
-  successBg:     "#14432a",
-  warningFg:     "#fbbf24",
-
-  switchTrackOn:  "#6090f5",
-  switchTrackOff: "#4a5568",
-  switchKnob:     "#ffffff",
-
-  bubbleOut:            "#1e3460",
-  bubbleIn:             "#1a2236",
-  bubbleBorderOut:      "#2a4070",
-  bubbleBorderIn:       "#2a3550",
-  quoteBackground:      "#232d42",
-  quoteBorder:          "#6090f5",
-  favoriteBubbleBg:     "#292419",     // subtle warm dark amber tint
-  favoriteBubbleBorder: "#52431f",     // warm dark amber border
-  favoriteBubbleGlow:   "0 2px 10px rgba(245, 158, 11, 0.15)",
-  highlightBg:          "#382d15",     // calm dark amber highlight
-  highlightBorder:      "#d97706",
-  highlightGlow:        "0 0 0 3px rgba(245, 158, 11, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3)",
-};
-
-const STORAGE_KEY = "phonemail_web_theme";
+const STORAGE_KEY_THEME  = "theme";
+const STORAGE_KEY_LEGACY = "phonemail_web_theme";
 
 export const ThemeContext = createContext({
   isDark: false,
-  colors: lightColors,
+  themeMode: "light",
+  setThemeMode: () => {},
+  colors: TOKEN_COLORS,
   toggleTheme: () => {},
   setTheme: () => {},
 });
 
 export function ThemeProvider({ children }) {
-  const [isDark, setIsDark] = useState(() => {
+  const [themeMode, setThemeModeState] = useState(() => {
     try {
-      return localStorage.getItem(STORAGE_KEY) === "dark";
+      const stored = localStorage.getItem(STORAGE_KEY_THEME) || localStorage.getItem(STORAGE_KEY_LEGACY);
+      if (stored === "dark" || stored === "light" || stored === "auto") return stored;
+      return "light";
     } catch {
-      return false;
+      return "light";
     }
   });
 
-  const setTheme = (dark) => {
-    setIsDark(dark);
+  const [systemDark, setSystemDark] = useState(() => {
+    if (typeof window !== "undefined" && window.matchMedia) {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e) => setSystemDark(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  const isDark = themeMode === "auto" ? systemDark : themeMode === "dark";
+
+  const setThemeMode = (mode) => {
+    setThemeModeState(mode);
     try {
-      localStorage.setItem(STORAGE_KEY, dark ? "dark" : "light");
+      localStorage.setItem(STORAGE_KEY_THEME, mode);
+      const effectiveDark = mode === "auto"
+        ? (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches)
+        : mode === "dark";
+      localStorage.setItem(STORAGE_KEY_LEGACY, effectiveDark ? "dark" : "light");
     } catch {}
   };
 
-  const toggleTheme = () => setTheme(!isDark);
+  const setTheme = (val) => {
+    if (typeof val === "boolean") {
+      setThemeMode(val ? "dark" : "light");
+    } else if (val === "auto" || val === "dark" || val === "light") {
+      setThemeMode(val);
+    }
+  };
 
-  const colors = isDark ? darkColors : lightColors;
+  const toggleTheme = () => {
+    setThemeMode(isDark ? "light" : "dark");
+  };
 
-  // Inject CSS custom properties so CSS classes (.sidebar-item--active, etc.) can read them
+  // Set data-theme attribute and update <meta name="theme-color">
   useEffect(() => {
     const root = document.documentElement;
-    root.style.setProperty("--bg", colors.bg);
-    root.style.setProperty("--surface", colors.surface);
-    root.style.setProperty("--surface-hover", colors.surfaceHover);
-    root.style.setProperty("--accent", colors.accent);
-    root.style.setProperty("--accent-light", colors.accentLight);
-    root.style.setProperty("--border", colors.border);
-    root.style.setProperty("--border-strong", colors.borderStrong);
-    root.style.setProperty("--text-primary", colors.textPrimary);
-    root.style.setProperty("--text-secondary", colors.textSecondary);
-    root.style.setProperty("--danger", colors.danger);
-    root.style.setProperty("--danger-bg", colors.dangerBg);
-    root.style.setProperty("--highlight-bg", colors.highlightBg);
-    root.style.setProperty("--highlight-border", colors.highlightBorder);
-    root.style.setProperty("--highlight-glow", colors.highlightGlow);
-    root.style.background = colors.bg;
-    root.style.color = colors.textPrimary;
-  }, [isDark, colors]);
+    root.setAttribute("data-theme", isDark ? "dark" : "light");
+
+    // Update theme-color meta from computed --bg token
+    try {
+      const bg = getComputedStyle(root).getPropertyValue("--bg").trim();
+      let meta = document.querySelector('meta[name="theme-color"]:not([media])');
+      if (!meta) {
+        meta = document.createElement("meta");
+        meta.name = "theme-color";
+        document.head.appendChild(meta);
+      }
+      if (bg) meta.content = bg;
+    } catch {}
+  }, [isDark]);
 
   return (
-    <ThemeContext.Provider value={{ isDark, colors, toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={{ isDark, themeMode, setThemeMode, colors: TOKEN_COLORS, toggleTheme, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );

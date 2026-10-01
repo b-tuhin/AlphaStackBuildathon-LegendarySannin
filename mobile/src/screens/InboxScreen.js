@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, RefreshControl } from "react-native";
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, RefreshControl, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "../theme/ThemeContext";
@@ -8,7 +8,7 @@ import { spacing, typography } from "../theme/whatsapp";
 import SearchBar from "../components/SearchBar";
 import FilterChips from "../components/FilterChips";
 import SwipeReplyWrapper from "../components/SwipeReplyWrapper";
-import { getThreads } from "../api/client";
+import { getThreads, updateThread } from "../api/client";
 import { formatPhoneNumber, getAvatarInitials, getAvatarColor } from "../utils/contact";
 
 // Skeleton loader for thread rows
@@ -58,6 +58,49 @@ export default function InboxScreen({ navigation }) {
     setRefreshing(false);
   };
 
+  const sortedThreads = React.useMemo(() => {
+    return [...threads].sort((a, b) => {
+      const aPinned = a.pinned ? 1 : 0;
+      const bPinned = b.pinned ? 1 : 0;
+      if (aPinned !== bPinned) return bPinned - aPinned;
+      if (aPinned === 1) {
+        const nameA = String(a.counterpart_name || a.counterpart || a.group_name || "").toLowerCase();
+        const nameB = String(b.counterpart_name || b.counterpart || b.group_name || "").toLowerCase();
+        return nameA.localeCompare(nameB);
+      }
+      return new Date(b.last_message_at || 0) - new Date(a.last_message_at || 0);
+    });
+  }, [threads]);
+
+  const handleTogglePin = async (item) => {
+    const isPinned = Boolean(item.pinned);
+    try {
+      await updateThread(item.id, { pinned: isPinned ? 0 : 1 });
+      load();
+    } catch (err) {
+      console.log("[inbox] toggle pin error", err.message);
+    }
+  };
+
+  const handleLongPress = (item) => {
+    const isPinned = Boolean(item.pinned);
+    const counterpartName = item.is_group
+      ? (item.group_name || item.counterpart || t("groupConversation"))
+      : (item.counterpart_name || formatPhoneNumber(item.counterpart || ""));
+
+    Alert.alert(
+      counterpartName,
+      undefined,
+      [
+        {
+          text: isPinned ? (t("unpin") || "Unpin") : (t("pin") || "Pin"),
+          onPress: () => handleTogglePin(item),
+        },
+        { text: t("cancel") || "Cancel", style: "cancel" },
+      ]
+    );
+  };
+
   const renderItem = ({ item }) => {
     const isGroup = Boolean(item.is_group);
     const counterpartName = isGroup
@@ -72,6 +115,8 @@ export default function InboxScreen({ navigation }) {
         <TouchableOpacity
           style={[styles.row, { backgroundColor: colors.card }]}
           onPress={() => navigation.navigate("Chat", { thread: item })}
+          onLongPress={() => handleLongPress(item)}
+          delayLongPress={400}
           activeOpacity={0.7}
         >
           <View style={[styles.avatar, { backgroundColor: avatarBg }]}>
@@ -93,9 +138,14 @@ export default function InboxScreen({ navigation }) {
                   {counterpartName}
                 </Text>
               </View>
-              <Text style={[styles.time, { color: colors.textSecondary }]}>
-                {new Date(item.last_message_at).toLocaleDateString([], { month: "short", day: "numeric" })}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                {Boolean(item.pinned) && (
+                  <Ionicons name="pin" size={13} color={colors.accent} style={{ marginRight: 4, transform: [{ rotate: "45deg" }] }} />
+                )}
+                <Text style={[styles.time, { color: colors.textSecondary }]}>
+                  {new Date(item.last_message_at).toLocaleDateString([], { month: "short", day: "numeric" })}
+                </Text>
+              </View>
             </View>
             <View style={styles.rowBottom}>
               <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: spacing.sm }}>
@@ -149,7 +199,7 @@ export default function InboxScreen({ navigation }) {
         </View>
       ) : (
         <FlatList
-          data={threads}
+          data={sortedThreads}
           keyExtractor={(t) => t.id}
           renderItem={renderItem}
           refreshControl={

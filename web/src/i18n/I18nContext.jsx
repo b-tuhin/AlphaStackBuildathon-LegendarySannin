@@ -44,9 +44,15 @@ export function I18nProvider({ children }) {
   const t = useCallback(
     (key, ...args) => {
       const dict = STRINGS[lang] || STRINGS.en;
-      const val = dict[key] ?? STRINGS.en[key];
+      const val = dict?.[key] ?? STRINGS.en?.[key];
       if (typeof val === "function") return val(...args);
-      return val ?? key;
+      if (val === undefined) {
+        if (typeof console !== "undefined" && console.warn) {
+          console.warn(`[i18n] Missing translation key: "${key}" for lang: "${lang}"`);
+        }
+        return undefined;
+      }
+      return val;
     },
     [lang]
   );

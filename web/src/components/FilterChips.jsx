@@ -15,12 +15,17 @@ export default function FilterChips({ active, onChange }) {
 
   return (
     <div
+      className="filter-chips-scroll"
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 6,
-        padding: "8px 14px",
+        gap: 8,
+        height: 56,
+        boxSizing: "border-box",
+        padding: "0 16px",
+        paddingRight: 16,
         overflowX: "auto",
+        scrollSnapType: "none",
         borderBottom: `1px solid ${colors.border}`,
         background: colors.surface,
         flexShrink: 0,
@@ -28,6 +33,7 @@ export default function FilterChips({ active, onChange }) {
     >
       {FILTERS.map((f) => {
         const isActive = active === f.key;
+        const isImportantChip = f.key === "favorites";
         return (
           <button
             key={f.key}
@@ -36,13 +42,17 @@ export default function FilterChips({ active, onChange }) {
             onClick={() => onChange(f.key)}
             className={`filter-chip${isActive ? " filter-chip--active" : ""}`}
             style={{
-              padding: "5px 13px",
-              borderRadius: 14,
-              border: isActive ? `1px solid ${colors.accent}` : `1px solid ${colors.border}`,
-              background: isActive ? colors.accentLight : colors.surfaceAlt,
-              color: isActive ? colors.textAccent : colors.textSecondary,
+              padding: "0 16px",
+              height: 40,
+              minHeight: 40,
+              boxSizing: "border-box",
+              borderRadius: 999,
+              border: isActive && isImportantChip ? "1px solid var(--important)" : "none",
+              background: isActive ? "var(--primary-tint)" : "var(--raised)",
+              color: isActive ? "var(--link)" : "var(--muted)",
               fontWeight: isActive ? 600 : 500,
               fontSize: 13,
+              fontFamily: "var(--font-sans)",
               cursor: "pointer",
               whiteSpace: "nowrap",
             }}

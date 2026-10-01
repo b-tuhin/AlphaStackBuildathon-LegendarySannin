@@ -1,9 +1,25 @@
-import React, { useState, useRef } from "react";
-import { Paperclip, RotateCcw, Trash2, Users, Minus } from "lucide-react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
+import {
+  Paperclip,
+  RotateCcw,
+  Trash2,
+  Users,
+  Minus,
+  MoreVertical,
+  Star,
+  MailOpen,
+  Mail,
+  Archive,
+  Pin,
+} from "lucide-react";
 import { useTheme } from "../theme/ThemeContext.jsx";
 import { useI18n } from "../i18n/I18nContext.jsx";
 import { getSenderDisplayName, getAvatarInitials, getAvatarColor, formatPhoneNumber } from "../utils/contact.js";
+import Avatar from "./Avatar.jsx";
 import ThemedCheckbox from "./ThemedCheckbox.jsx";
+import { highlightText } from "../utils/textHighlight.jsx";
+
 
 export default function ThreadList({
   items,
@@ -14,18 +30,42 @@ export default function ThreadList({
   filter,
   onDelete,
   onRestore,
+  onToggleRead,
+  onToggleImportant,
+  onArchive,
+  onTogglePin,
   onRetry,
   trashSelectionMode = false,
   selectedTrashIds = new Set(),
   onToggleSelectTrash,
   onEnterTrashSelection,
+  query = "",
 }) {
   const { colors } = useTheme();
   const { t } = useI18n();
 
+  const sortedItems = React.useMemo(() => {
+    if (!items || !items.length) return [];
+    return [...items].sort((a, b) => {
+      const aPinned = a.pinned ? 1 : 0;
+      const bPinned = b.pinned ? 1 : 0;
+      if (aPinned !== bPinned) {
+        return bPinned - aPinned; // pinned first
+      }
+      if (aPinned === 1) {
+        const nameA = String(a.counterpart_name || a.counterpart || a.from_name || a.from_address || "").toLowerCase();
+        const nameB = String(b.counterpart_name || b.counterpart || b.from_name || b.from_address || "").toLowerCase();
+        return nameA.localeCompare(nameB);
+      }
+      const dateA = new Date(a.last_message_at || a.created_at || 0).getTime();
+      const dateB = new Date(b.last_message_at || b.created_at || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [items]);
+
   if (loading && (!items || items.length === 0)) {
     return (
-      <div style={{ flex: 1, overflowY: "auto", background: colors.surface }}>
+      <div className="chat-scroll-container" style={{ flex: 1, overflowY: "auto", background: colors.surface }}>
         {[1, 2, 3, 4, 5, 6].map((i) => (
           <div
             key={i}
@@ -62,8 +102,8 @@ export default function ThreadList({
   }
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", background: colors.surface }}>
-      {items.map((item) => {
+    <div className="chat-scroll-container" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", background: "transparent", paddingTop: 4, paddingBottom: 8 }}>
+      {sortedItems.map((item) => {
         const isThread = folder === "home" || folder === "trash" || folder === "spam" || Boolean(item.participant_a || item.participants || item.counterpart);
         const id = item.id;
         const isSelected = selectedId === id;
@@ -90,15 +130,15 @@ export default function ThreadList({
           ? new Date(dateStr).toLocaleDateString([], { month: "short", day: "numeric" })
           : "";
 
-        const hasRealSub = Boolean(item.subject && typeof item.subject === "string" && item.subject.trim() && item.subject.trim() !== "(no subject)");
+        const hasRealSub = Boolean(item.subject && typeof item.subject === "string" && item.subject.trim() && item.subject.trim() !== "(no subject)" && !/^[\-\u2013\u2014\s]+$/.test(item.subject));
         const snippet = isThread
           ? (item.last_message || (hasRealSub ? item.subject : "") || "No messages yet")
           : (item.body_text || (hasRealSub ? item.subject : "") || "(no message text)");
 
-        const hasAttachments = Boolean(item.has_attachments);
+        const hasAttachments = Boolean(item.last_has_attachments ?? item.has_attachments);
 
         return (
-          <ThreadRow
+          <SlideRow
             key={id}
             item={item}
             isThread={isThread}
@@ -107,6 +147,8 @@ export default function ThreadList({
             displayName={displayName}
             initials={initials}
             avatarBg={avatarBg}
+            avatarSrc={isThread ? item.avatar_url : item.from_avatar_url}
+            avatarKey={avatarKey}
             formattedDate={formattedDate}
             snippet={snippet}
             hasAttachments={hasAttachments}
@@ -115,10 +157,15 @@ export default function ThreadList({
             onSelect={onSelect}
             onDelete={onDelete}
             onRestore={onRestore}
+            onToggleRead={onToggleRead}
+            onToggleImportant={onToggleImportant}
+            onArchive={onArchive}
+            onTogglePin={onTogglePin}
             trashSelectionMode={trashSelectionMode}
             isTrashSelected={selectedTrashIds?.has(item.id)}
             onToggleSelectTrash={onToggleSelectTrash}
             onEnterTrashSelection={onEnterTrashSelection}
+            query={query}
           />
         );
       })}
@@ -128,19 +175,83 @@ export default function ThreadList({
 
 /** Separate row component so hover state is isolated per-row */
 function ThreadRow({
-  item, isThread, isSelected, isUnread, displayName, initials, avatarBg,
+  item, isThread, isSelected, isUnread, displayName, initials, avatarBg, avatarSrc, avatarKey,
   formattedDate, snippet, hasAttachments, colors, folder, onSelect, onDelete, onRestore,
+  onToggleRead, onToggleImportant, onArchive, onTogglePin,
   trashSelectionMode, isTrashSelected, onToggleSelectTrash, onEnterTrashSelection,
+  query = "",
 }) {
+  const { t } = useI18n();
   const [hovered, setHovered] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuCoords, setMenuCoords] = useState(null);
+  const menuRef = useRef(null);
+  const triggerRef = useRef(null);
   const longPressTimerRef = useRef(null);
   const touchStartPosRef = useRef(null);
   const didLongPressRef = useRef(false);
 
   const isTrash = folder === "trash";
+  const isImportant = Boolean(item.is_favorite);
+
+  // Compute menu coordinates synchronously before paint to prevent positioning flash
+  useLayoutEffect(() => {
+    if (!menuOpen || !triggerRef.current) {
+      setMenuCoords(null);
+      return;
+    }
+    const rect = triggerRef.current.getBoundingClientRect();
+    const menuWidth = 180;
+    let left = rect.right - menuWidth;
+    if (left < 8) left = 8;
+    if (left + menuWidth > window.innerWidth - 8) {
+      left = Math.max(8, window.innerWidth - menuWidth - 8);
+    }
+    let top = rect.bottom + 4;
+    const estimatedHeight = 160;
+    if (top + estimatedHeight > window.innerHeight && rect.top > estimatedHeight) {
+      top = rect.top - estimatedHeight - 4;
+    }
+    setMenuCoords({
+      top: Math.round(top),
+      left: Math.round(left),
+    });
+  }, [menuOpen]);
+
+  // Close menu on click outside, Escape, or scroll
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleOutsideClick = (e) => {
+      if (
+        menuRef.current && !menuRef.current.contains(e.target) &&
+        triggerRef.current && !triggerRef.current.contains(e.target)
+      ) {
+        setMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+      }
+    };
+    const handleScrollOrResize = () => {
+      setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("touchstart", handleOutsideClick);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("scroll", handleScrollOrResize, true);
+    window.addEventListener("resize", handleScrollOrResize);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize);
+    };
+  }, [menuOpen]);
 
   const handleTouchStart = (e) => {
-    if (!isTrash) return;
     const touch = e.touches[0];
     touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
     didLongPressRef.current = false;
@@ -150,12 +261,16 @@ function ThreadRow({
       if (navigator.vibrate) {
         try { navigator.vibrate(35); } catch {}
       }
-      if (onEnterTrashSelection) onEnterTrashSelection(item.id);
+      if (isTrash) {
+        if (onEnterTrashSelection) onEnterTrashSelection(item.id);
+      } else {
+        setMenuOpen(true);
+      }
     }, 450);
   };
 
   const handleTouchMove = (e) => {
-    if (!isTrash || !touchStartPosRef.current) return;
+    if (!touchStartPosRef.current) return;
     const touch = e.touches[0];
     const dist = Math.hypot(touch.clientX - touchStartPosRef.current.x, touch.clientY - touchStartPosRef.current.y);
     if (dist > 8) {
@@ -169,18 +284,20 @@ function ThreadRow({
   };
 
   const handleMouseDown = (e) => {
-    if (!isTrash || e.button !== 0) return;
+    if (e.button !== 0) return;
     touchStartPosRef.current = { x: e.clientX, y: e.clientY };
     didLongPressRef.current = false;
     clearTimeout(longPressTimerRef.current);
     longPressTimerRef.current = setTimeout(() => {
       didLongPressRef.current = true;
-      if (onEnterTrashSelection) onEnterTrashSelection(item.id);
+      if (isTrash) {
+        if (onEnterTrashSelection) onEnterTrashSelection(item.id);
+      }
     }, 450);
   };
 
   const handleMouseMove = (e) => {
-    if (!isTrash || !touchStartPosRef.current) return;
+    if (!touchStartPosRef.current) return;
     const dist = Math.hypot(e.clientX - touchStartPosRef.current.x, e.clientY - touchStartPosRef.current.y);
     if (dist > 8) {
       clearTimeout(longPressTimerRef.current);
@@ -201,16 +318,20 @@ function ThreadRow({
       if (onToggleSelectTrash) onToggleSelectTrash(item.id);
       return;
     }
+    if (menuOpen) {
+      setMenuOpen(false);
+      return;
+    }
     onSelect(item);
   };
 
   const bgColor = isTrash && trashSelectionMode && isTrashSelected
-    ? colors.accentLight
+    ? "var(--primary-tint)"
     : isSelected
-    ? colors.surfaceHover
+    ? "var(--primary-tint)"
     : hovered
-    ? colors.surfaceHover
-    : colors.surface;
+    ? "var(--hover)"
+    : "transparent";
 
   return (
     <div
@@ -228,10 +349,14 @@ function ThreadRow({
       style={{
         display: "flex",
         alignItems: "center",
-        padding: "12px 16px",
+        minHeight: 72,
+        boxSizing: "border-box",
+        padding: 12,
+        margin: "0 8px",
+        marginBottom: 4,
         cursor: "pointer",
-        borderBottom: `1px solid ${colors.border}`,
         background: bgColor,
+        borderRadius: "var(--r-md)",
         gap: 12,
         position: "relative",
       }}
@@ -240,6 +365,7 @@ function ThreadRow({
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleClick(e); }}
       aria-pressed={isSelected}
     >
+
       {/* Trash multi-select checkbox */}
       {isTrash && trashSelectionMode && (
         <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
@@ -253,62 +379,56 @@ function ThreadRow({
       )}
 
       {/* Sender / Group Avatar */}
-      <div
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: 22,
-          background: avatarBg,
-          color: "#fff",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontWeight: 700,
-          fontSize: 16,
-          flexShrink: 0,
-        }}
-      >
-        {initials}
-      </div>
+      <Avatar src={avatarSrc} name={displayName} colorKey={avatarKey} isGroup={Boolean(isThread && item.is_group)} size={48} fontSize={18} />
 
       {/* Main Content */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
-        {/* Row 1: Name and Date */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+        {/* Row 1: Name, Star, and Date on one baseline */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", minWidth: 0, gap: 8 }}>
           <span
             style={{
-              fontWeight: isUnread ? 700 : 500,
-              fontSize: 14,
+              fontWeight: isUnread ? 700 : 600,
+              fontSize: 16,
               color: colors.textPrimary,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
-              maxWidth: "70%",
+              minWidth: 0,
+              flex: 1,
               display: "flex",
               alignItems: "center",
-              gap: 5,
+              gap: 6,
             }}
           >
             {isThread && item.is_group && (
-              <Users size={13} strokeWidth={2} color={colors.textSecondary} style={{ flexShrink: 0 }} />
+              <Users size={15} strokeWidth={1.75} color={colors.textSecondary} style={{ flexShrink: 0 }} />
             )}
             {displayName}
           </span>
-          <span style={{ fontSize: 11, color: colors.textSecondary, flexShrink: 0 }}>
-            {formattedDate}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            {Boolean(item.pinned) && (
+              <Pin size={12} fill={colors.accent} color={colors.accent} style={{ flexShrink: 0, transform: "rotate(45deg)" }} title={t("pinned") || "Pinned"} />
+            )}
+            {isImportant && (
+              null
+            )}
+            <span style={{ fontSize: 12, color: colors.textSecondary }}>
+              {formattedDate}
+            </span>
+          </div>
         </div>
 
-        {/* Row 2: Subject & Message Preview */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        {/* Row 2: Subject & Message Preview (4px below name) */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, minWidth: 0 }}>
           <span
             style={{
-              fontSize: 13,
-              color: isUnread ? colors.textPrimary : colors.textSecondary,
+              fontSize: 14,
+              color: colors.textSecondary,
               fontWeight: isUnread ? 600 : 400,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
+              minWidth: 0,
               flex: 1,
               display: "flex",
               alignItems: "center",
@@ -319,8 +439,8 @@ function ThreadRow({
               <Paperclip size={12} strokeWidth={2} color={colors.textSecondary} style={{ flexShrink: 0 }} title="Has attachment" />
             )}
             {isThread && !item.is_group ? (
-              (item.subject && typeof item.subject === "string" && item.subject.trim() && item.subject.trim() !== "(no subject)") ? (
-                <><strong style={{ color: colors.textPrimary, marginRight: 4 }}>{item.subject} —</strong>{snippet}</>
+              (item.subject && typeof item.subject === "string" && item.subject.trim() && item.subject.trim() !== "(no subject)" && !/^[\-\u2013\u2014\s]+$/.test(item.subject)) ? (
+                <><strong style={{ color: colors.textPrimary, marginRight: 4 }}>{item.subject}:</strong>{query ? highlightText(snippet, query) : snippet}</>
               ) : (
                 <>
                   <span
@@ -333,22 +453,20 @@ function ThreadRow({
                     }}
                     title="No subject"
                   >
-                    <Minus size={12} strokeWidth={2.5} />
                   </span>
-                  <span style={{ color: colors.textSecondary, marginRight: 4 }}>—</span>
-                  {snippet}
+                  {query ? highlightText(snippet, query) : snippet}
                 </>
               )
-            ) : snippet}
+            ) : (query ? highlightText(snippet, query) : snippet)}
           </span>
 
-          {/* Badge or Restore/Delete actions */}
-          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+          {/* Badge, Actions, and Overflow Menu */}
+          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, position: "relative" }}>
             {isThread && item.unread_count > 0 && (
               <span
                 style={{
-                  background: colors.accent,
-                  color: "#fff",
+                  background: "var(--primary)",
+                  color: "var(--on-primary)",
                   borderRadius: 10,
                   fontSize: 11,
                   fontWeight: 700,
@@ -384,29 +502,147 @@ function ThreadRow({
               </button>
             )}
 
-            {onDelete && (
-              <button
-                type="button"
-                title="Move to trash"
-                onClick={(e) => { e.stopPropagation(); onDelete(item); }}
-                className="icon-btn icon-btn-danger"
+            {/* Hover-reveal ⋮ button */}
+            <button
+              ref={triggerRef}
+              type="button"
+              data-ui-exempt="true"
+              title="More actions"
+              aria-label="More actions"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMenuOpen((prev) => !prev);
+              }}
+              className="icon-btn"
+              style={{
+                border: "none",
+                background: menuOpen ? colors.surfaceHover : "none",
+                cursor: "pointer",
+                padding: "3px 4px",
+                borderRadius: 4,
+                color: colors.textSecondary,
+                display: "flex",
+                alignItems: "center",
+                opacity: (hovered || menuOpen) ? 1 : 0,
+                transition: "opacity 0.15s ease",
+              }}
+            >
+              <MoreVertical size={15} strokeWidth={2} />
+            </button>
+
+            {/* Dropdown Menu via Portal to prevent layout jump and overflow clipping */}
+            {menuOpen && typeof document !== "undefined" && createPortal(
+              <div
+                ref={menuRef}
+                onClick={(e) => e.stopPropagation()}
                 style={{
-                  border: "none",
-                  background: "none",
-                  cursor: "pointer",
-                  padding: "3px 4px",
-                  color: colors.textSecondary,
+                  position: "fixed",
+                  top: menuCoords ? menuCoords.top : -9999,
+                  left: menuCoords ? menuCoords.left : -9999,
+                  opacity: menuCoords ? 1 : 0,
+                  visibility: menuCoords ? "visible" : "hidden",
+                  minWidth: 175,
+                  background: colors.surfaceCard || colors.surfaceAlt || colors.surface,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: 8,
+                  boxShadow: "var(--shadow-sm)",
+                  zIndex: 99999,
+                  padding: "4px 0",
                   display: "flex",
-                  alignItems: "center",
-                  opacity: 0.7,
+                  flexDirection: "column",
+                  transition: "opacity 0.08s ease",
                 }}
               >
-                <Trash2 size={14} strokeWidth={2} />
-              </button>
+                {/* Pin / Unpin */}
+                {onTogglePin && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpen(false);
+                      onTogglePin(item);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      width: "100%",
+                      padding: "8px 12px",
+                      border: "none",
+                      background: "transparent",
+                      color: colors.textPrimary,
+                      fontSize: 13,
+                      fontWeight: 500,
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = colors.surfaceHover)}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <Pin size={15} color={Boolean(item.pinned) ? colors.accent : colors.textSecondary} fill={Boolean(item.pinned) ? colors.accent : "none"} style={{ transform: "rotate(45deg)" }} />
+                    <span>{Boolean(item.pinned) ? (t("unpin") || "Unpin") : (t("pin") || "Pin")}</span>
+                  </button>
+                )}
+
+                {/* Divider */}
+                <div style={{ height: 1, background: colors.border, margin: "4px 0" }} />
+
+                {/* 4. Trash / Delete permanently */}
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpen(false);
+                      onDelete(item);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      width: "100%",
+                      padding: "8px 12px",
+                      border: "none",
+                      background: "transparent",
+                      color: colors.danger,
+                      fontSize: 13,
+                      fontWeight: 500,
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = colors.surfaceHover)}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <Trash2 size={15} color={colors.danger} />
+                    <span>{folder === "trash" ? (t("deletePermanently") || "Delete permanently") : (t("moveToTrash") || "Move to trash")}</span>
+                  </button>
+                )}
+              </div>,
+              document.body
             )}
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+/** Glides a row from its old position to its new one when the list reorders */
+function SlideRow(props) {
+  const ref = useRef(null);
+  const prevTop = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const top = el.offsetTop;
+    const prev = prevTop.current;
+    prevTop.current = top;
+    if (prev === null || prev === top) return;
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const up = prev > top; el.style.position = "relative"; el.style.zIndex = up ? "3" : "1"; if (up) el.style.background = "var(--surface)"; setTimeout(() => { el.style.zIndex = ""; el.style.background = ""; }, 470); el.animate(
+      [{ transform: `translateY(${prev - top}px)` }, { transform: "translateY(0)" }],
+      { duration: 450, easing: "cubic-bezier(0.4, 0, 0.2, 1)" }
+    );
+  });
+  return <div ref={ref} style={{ willChange: "transform" }}><ThreadRow {...props} /></div>;
 }

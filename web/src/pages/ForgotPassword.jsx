@@ -4,6 +4,9 @@ import { requestPasswordReset, confirmPasswordReset } from "../api/client.js";
 import PasswordField from "../components/PasswordField.jsx";
 import StrengthMeter from "../components/StrengthMeter.jsx";
 import { styles } from "./Register.jsx";
+import { APP_NAME } from "../config/brand.js";
+import Logo from "../components/Logo.jsx";
+import { useIsMobile } from "../utils/useIsMobile.js";
 
 /**
  * useWebOTP — listens for a one-time password from the browser's
@@ -11,7 +14,7 @@ import { styles } from "./Register.jsx";
  * 6-digit code, then cleans up.  Only fires when `active` is true so
  * we don't request credentials on every render.
  *
- * SMS must contain a line like:  "... @phonemail.com #123456"
+ * SMS must contain a line like:  "... @bharatchat.com #OTP-CODE"
  * (origin-bound OTP format — https://wicg.github.io/sms-one-time-codes/)
  */
 function useWebOTP(onCode, active) {
@@ -42,6 +45,7 @@ export default function ForgotPassword() {
   const [error, setError]             = useState("");
   const [loading, setLoading]         = useState(false);
   const navigate = useNavigate();
+  const isNarrow = useIsMobile(1023);
 
   // Activate WebOTP only on the confirm step, not on request
   useWebOTP((autofilled) => setCode(autofilled), step === "confirm");
@@ -85,9 +89,12 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div style={styles.page}>
+    <div style={{ ...styles.page, padding: isNarrow ? 8 : styles.page.padding }}>
       <div style={styles.card}>
-        <h1 style={styles.logo}>PhoneMail</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+          <Logo size={40} />
+          <h1 style={{ ...styles.logo, margin: 0 }}>{APP_NAME}</h1>
+        </div>
         <p style={styles.tagline}>Reset your password with a code sent by SMS.</p>
 
         {step === "request" ? (

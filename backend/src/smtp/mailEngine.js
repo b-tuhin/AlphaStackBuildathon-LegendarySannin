@@ -2,12 +2,13 @@ import { v4 as uuid } from "uuid";
 import { db } from "../db/database.js";
 import { config } from "../config.js";
 import { notifyRecipient, notifyGroup } from "../telephony/notifier.js";
+import { normalizePhone } from "../auth/password.js";
 
 const PHONE_RE = /^\+?\d{7,15}$/;
 
 /** "9876543210" -> "9876543210@phonemail.com" */
 export function phoneToEmail(phone) {
-  const normalized = String(phone).replace(/[^\d]/g, "");
+  const normalized = (normalizePhone(phone) || String(phone)).replace(/[^\d]/g, "");
   return `${normalized}@${config.mailDomain}`;
 }
 
@@ -16,7 +17,7 @@ export function normalizeAddress(input) {
   const raw = String(input).trim();
   const angle = raw.match(/<([^>]+)>/);
   const addr = (angle ? angle[1] : raw).toLowerCase();
-  if (PHONE_RE.test(addr)) return phoneToEmail(addr);
+  if (PHONE_RE.test(addr)) return phoneToEmail(normalizePhone(addr) || addr);
   return addr;
 }
 
@@ -34,7 +35,8 @@ function stripRe(subject) {
 
 function displayNameFor(address) {
   const local = address.split("@")[0];
-  const user = db.prepare(`SELECT display_name FROM users WHERE phone = ?`).get(local);
+  const phone = normalizePhone(`+${local.replace(/\D/g, "")}`);
+  const user = db.prepare(`SELECT display_name FROM users WHERE phone = ?`).get(phone);
   return (user && user.display_name) || local;
 }
 
@@ -78,7 +80,7 @@ function findOrCreateGroupThread(addresses, subject) {
  * Ingest a message. `to` may be a single address/phone or an array of them.
  * 2+ recipients (or 1 recipient + explicit group=true) creates/uses a group thread.
  */
-export function ingestEmail({ from, to, subject, text, html, attachments = [], inReplyTo = null, source = "api", folder = "home" }) {
+export async function ingestEmail({ from, to, subject, text, html, attachments = [], inReplyTo = null, source = "api", folder = "home" }) {
   const fromAddr = normalizeAddress(from);
   const toList = (Array.isArray(to) ? to : [to]).map(normalizeAddress);
   const isGroup = toList.length > 1;
@@ -87,10 +89,11 @@ export function ingestEmail({ from, to, subject, text, html, attachments = [], i
   const unregistered = [];
   for (const rcpt of toList) {
     const local = rcpt.split("@")[0].replace(/[^\d]/g, "");
+    const phone = normalizePhone(`+${local}`);
     const rawLocal = rcpt.split("@")[0].toLowerCase();
     const user = db.prepare(
-      `SELECT id FROM users WHERE phone = ? OR email_address = ? OR aliases LIKE ?`
-    ).get(local, rcpt, `%"${rawLocal}"%`);
+      `SELECT id FROM users WHERE phone = ? OR email_address = ? OR id IN (SELECT user_id FROM alias_map WHERE alias = ?)`
+    ).get(phone, rcpt, rawLocal);
     if (!user) {
       unregistered.push(rcpt);
     }
@@ -152,9 +155,34 @@ export function ingestEmail({ from, to, subject, text, html, attachments = [], i
        @subject, @body_text, @body_html, @has_attachments, @attachments, @folder, @source)`
   ).run(email);
 
+  // ── Maintain per-user thread_state ──────────────────────────────
+  // For sender: folder = home, is_read = 1, clear deleted_at
+  db.prepare(`
+    INSERT INTO thread_state (thread_id, user_address, folder, is_read, is_favorite, pinned, deleted_at)
+    VALUES (?, ?, 'home', 1, 0, 0, NULL)
+    ON CONFLICT(thread_id, user_address) DO UPDATE SET
+      folder = CASE WHEN folder = 'trash' THEN 'home' ELSE folder END,
+      deleted_at = NULL
+  `).run(thread.id, fromAddr);
+
+  // For each recipient: folder = home, is_read = 0 (unread!), clear deleted_at
+  const upsertRcptState = db.prepare(`
+    INSERT INTO thread_state (thread_id, user_address, folder, is_read, is_favorite, pinned, deleted_at)
+    VALUES (?, ?, 'home', 0, 0, 0, NULL)
+    ON CONFLICT(thread_id, user_address) DO UPDATE SET
+      is_read = 0,
+      folder = CASE WHEN folder = 'trash' THEN 'home' ELSE folder END,
+      deleted_at = NULL
+  `);
+  for (const rcpt of toList) {
+    if (rcpt && rcpt !== fromAddr) {
+      upsertRcptState.run(thread.id, rcpt);
+    }
+  }
+
   if (folder === "home") {
-    if (isGroup) notifyGroup(toList, fromAddr, subject);
-    else notifyRecipient(toList[0], fromAddr, subject);
+    if (isGroup) await notifyGroup(toList, fromAddr, subject);
+    else if (toList[0] !== fromAddr) await notifyRecipient(toList[0], fromAddr, subject);
   }
 
   return { emailId: email.id, threadId: thread.id, messageId: email.message_id, isGroup };

@@ -1,29 +1,42 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-// ── JWT_SECRET guard ──────────────────────────────────────────────────────────
-// The placeholder values (from .env.example and the old docker-compose default)
-// must never be used in production.  Fail fast so a misconfigured deployment is
-// caught at startup rather than discovered after a breach.
 const PLACEHOLDER_SECRETS = new Set([
   "phonemail_dev_secret",
   "change_me_in_production",
+  "REPLACE_WITH_A_STRONG_RANDOM_SECRET",
   "",
 ]);
-
 const rawSecret = process.env.JWT_SECRET ?? "";
 const isProduction = (process.env.NODE_ENV || "development") === "production";
+const otpMode = String(process.env.OTP_MODE || "twilio").toLowerCase();
+const twilioMock = /^(true|1|yes|on)$/i.test(String(process.env.TWILIO_MOCK || "false").trim());
+const publicBaseUrl = String(process.env.PUBLIC_BASE_URL || "").replace(/\/$/, "");
 
+if (!new Set(["twilio", "password"]).has(otpMode)) {
+  throw new Error("OTP_MODE must be either twilio or password");
+}
 if (isProduction && PLACEHOLDER_SECRETS.has(rawSecret)) {
-  console.error(
-    "[FATAL] JWT_SECRET is missing or equals a placeholder value. " +
-      "Set a strong, unique secret before running in production."
-  );
+  console.error("[FATAL] JWT_SECRET is missing or equals a placeholder; set a strong, unique secret.");
   process.exit(1);
 }
+if (isProduction && twilioMock) {
+  console.error("[FATAL] Mock SMS is not allowed in production; set TWILIO_MOCK=false.");
+  process.exit(1);
+}
+if (isProduction && otpMode === "twilio") {
+  const required = ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_VERIFY_SERVICE_SID", "PUBLIC_BASE_URL", "TWILIO_PHONE_NUMBER"];
+  const missing = required.filter((key) => !process.env[key]);
+  if (missing.length) {
+    console.error(`[FATAL] Missing required production environment settings: ${missing.join(", ")}`);
+    process.exit(1);
+  }
+  if (!/^https:\/\//i.test(publicBaseUrl)) {
+    console.error("[FATAL] PUBLIC_BASE_URL must be an HTTPS origin in production.");
+    process.exit(1);
+  }
+}
 
-// In development fall back to a predictable value so `npm run dev` still works
-// without a .env file.  Never let this reach production (the guard above stops it).
 const jwtSecret = rawSecret || "phonemail_dev_secret";
 
 export const config = {
@@ -35,11 +48,12 @@ export const config = {
   jwtSecret,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
   dbPath: process.env.DB_PATH || "./data/phonemail.db",
-  resetCodeTtlMs: 15 * 60 * 1000,
-  resetMaxAttempts: 5,
+  otpMode,
+  tosVersion: process.env.TOS_VERSION || "2026-09-30",
+  publicBaseUrl,
+  otp: { ttlMs: 10 * 60 * 1000, resendCooldownMs: 60 * 1000, maxChecks: 5, maxStartsPerPhoneDay: 10, maxStartsPerIpDay: 30, maxChecksPerIpHour: 30 },
   loginWindowMs: 15 * 60 * 1000,
   loginMaxAttempts: 5,
-  // Rate-limit shared settings (register / reset-request reuse login window)
   registerWindowMs: 15 * 60 * 1000,
   registerMaxAttempts: 5,
   resetRequestWindowMs: 15 * 60 * 1000,
@@ -47,7 +61,8 @@ export const config = {
   twilio: {
     accountSid: process.env.TWILIO_ACCOUNT_SID || "",
     authToken: process.env.TWILIO_AUTH_TOKEN || "",
+    verifyServiceSid: process.env.TWILIO_VERIFY_SERVICE_SID || "",
     phoneNumber: process.env.TWILIO_PHONE_NUMBER || "",
-    mock: (process.env.TWILIO_MOCK || "true") === "true",
+    mock: twilioMock,
   },
 };

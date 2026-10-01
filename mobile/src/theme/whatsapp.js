@@ -1,23 +1,31 @@
-// Spike Mail inspired design tokens (clean, minimal, non-skeuomorphic)
+// Balanced Tricolor tokens for PhoneMail
 export const colors = {
-  primary: "#1E293B",        // Spike clean slate (headers)
-  primaryLight: "#2563EB",   // Spike royal blue (buttons/accents)
-  accent: "#2563EB",         // Spike action blue
-  bubbleOut: "#EFF6FF",      // outgoing chat bubble (clean soft blue tint)
-  bubbleIn: "#FFFFFF",       // incoming chat bubble (clean white card)
-  bubbleBorderOut: "#DBEAFE",// subtle border for outgoing
-  bubbleBorderIn: "#E2E8F0", // subtle border for incoming
-  background: "#F8FAFC",     // chat wallpaper (clean off-white)
-  listBackground: "#FFFFFF",
-  divider: "#E2E8F0",
-  textPrimary: "#0F172A",
-  textSecondary: "#64748B",
-  unreadBadge: "#2563EB",
-  danger: "#EF4444",
-  chipActive: "#2563EB",
-  chipInactive: "#F1F5F9",
-  quoteBorder: "#2563EB",
-  quoteBackground: "#F1F5F9",
+  primary: "#18181a",        // Neutral charcoal (headers)
+  primaryLight: "#e6820a",   // Saffron (buttons/accents)
+  accent: "#e6820a",         // Saffron action
+  accentLight: "#fef3e2",
+  bubbleOut: "#fef3e2",      // outgoing chat bubble (warm saffron tint)
+  bubbleIn: "#ffffff",       // incoming chat bubble (clean white card)
+  bubbleBorderOut: "#fce0be",// subtle border for outgoing
+  bubbleBorderIn: "#dcdcdc", // subtle border for incoming
+  background: "#f4f4f5",     // chat wallpaper (neutral canvas)
+  bg: "#f4f4f5",
+  surface: "#ffffff",
+  listBackground: "#ffffff",
+  divider: "#dcdcdc",
+  border: "#dcdcdc",
+  textPrimary: "#18181a",
+  textSecondary: "#5b6068",
+  unreadBadge: "#e6820a",
+  danger: "#c73a32",
+  dangerBg: "#fde8e7",
+  success: "#178a45",
+  successBg: "#eaf6ee",
+  navyMark: "#22337a",
+  chipActive: "#e6820a",
+  chipInactive: "#f0f0f1",
+  quoteBorder: "#e6820a",
+  quoteBackground: "#f0f0f1",
 };
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };

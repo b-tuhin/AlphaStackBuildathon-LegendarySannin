@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, ActivityIndicator, Alert, Platform } from "react-native";
 import { colors, spacing, typography } from "../../theme/whatsapp";
-import { login, setToken, setRefreshToken } from "../../api/client";
+import { login, setToken, setRefreshToken, registerDevice } from "../../api/client";
 import PasswordInput from "../../components/PasswordInput";
 
 export default function PasswordLoginScreen({ route, navigation }) {
@@ -14,8 +14,9 @@ export default function PasswordLoginScreen({ route, navigation }) {
     if (digits.length < 7) return Alert.alert("Invalid number", "Enter a valid phone number.");
     setLoading(true);
     try {
-      const { data } = await login(digits, password);
+      const { data } = await login(phone, password);
       await setToken(data.token);
+      await registerDevice(Platform.OS === "ios" ? "ios" : "android", null).catch(() => {});
       if (data.refreshToken) {
         await setRefreshToken(data.refreshToken);
       }
@@ -33,10 +34,9 @@ export default function PasswordLoginScreen({ route, navigation }) {
       <Text style={styles.title}>Sign in</Text>
       <Text style={styles.subtitle}>Use your phone number and password.</Text>
       <View style={styles.phoneRow}>
-        <Text style={styles.prefix}>+</Text>
         <TextInput
           style={styles.phoneInput}
-          placeholder="Phone number"
+          placeholder="+91 98765 43210"
           keyboardType="phone-pad"
           value={phone}
           onChangeText={setPhone}

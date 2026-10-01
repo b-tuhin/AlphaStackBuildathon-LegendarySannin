@@ -3,12 +3,16 @@ import { setPassword } from "../api/client.js";
 import PasswordField from "../components/PasswordField.jsx";
 import StrengthMeter from "../components/StrengthMeter.jsx";
 import { styles } from "./Register.jsx";
+import { APP_NAME } from "../config/brand.js";
+import Logo from "../components/Logo.jsx";
+import { useIsMobile } from "../utils/useIsMobile.js";
 
 export default function ChangePassword({ onDone }) {
   const [password, setPw] = useState("");
   const [confirmPassword, setConfirm] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const isNarrow = useIsMobile(1023);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -27,9 +31,12 @@ export default function ChangePassword({ onDone }) {
   };
 
   return (
-    <div style={styles.page}>
+    <div style={{ ...styles.page, padding: isNarrow ? 8 : styles.page.padding }}>
       <div style={styles.card}>
-        <h1 style={styles.logo}>PhoneMail</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+          <Logo size={40} />
+          <h1 style={{ ...styles.logo, margin: 0 }}>{APP_NAME}</h1>
+        </div>
         <p style={styles.tagline}>Choose a new password before you continue. Temporary passwords from SMS or phone signup must be changed.</p>
         <form onSubmit={submit}>
           <label style={styles.label}>New password</label>
