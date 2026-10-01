@@ -154,3 +154,32 @@ phonemail/
   again.  Add a `POST /auth/refresh` endpoint returning a new short-lived access
   token from a long-lived, `httpOnly`-cookie refresh token if you need both
   security and seamless session renewal.
+
+
+## Features (Bharat Chat)
+
+Email where your phone number is your address (for example 9876543210@bharatchat.com), shown as chats on mobile and as a Gmail-style inbox on the web.
+
+**Accounts and login**
+- Login order: language, Terms and Privacy (separate page), phone number, then password. A known number goes to Sign in, a new number goes to Create account.
+- Password-based authentication (OTP_MODE=password), used because no free OTP/SMS provider is available. No SMS codes are required.
+- Change password in Settings; Forgot password explains the password-only flow.
+- Eight languages: English, Hindi, Tamil, Telugu, Bengali, Marathi, Punjabi, Gujarati.
+
+**Chats and mail**
+- All mail organised as chats and conversations; no separate Inbox or Sent folders.
+- Compose in the traditional view or start a chat by searching a phone number; group chats; reply once per message; subject line for new emails.
+- Filter chips (All, Unread, Attachments, Important), search with a clear button, Drafts, Spam, Trash, Important folders.
+- Long-press multi-select in Trash, Spam, Important and Drafts with Restore, Delete and "Mark as not important" actions.
+- Permanent delete clears only your side; the other person's chat is unchanged.
+- Empty messages cannot be sent; a gentle reminder appears if the text mentions an attachment but none is added.
+- A "Try again" message appears when a folder fails to load.
+- Message details view with a compact action menu on mobile.
+- Correct local times for server timestamps.
+
+**Design**
+- Pink palette with light and dark themes, chat wallpaper switch, WhatsApp-like mobile layout.
+
+**Run it**
+- `docker compose up -d --build`
+- Web on port 3000, backend on port 4000. For development: `npm run dev` in `web` (port 5173).

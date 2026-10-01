@@ -1,5 +1,6 @@
 const extraA = {
   en: {
+    setChatBg: "Chat background", setShowWall: "Show wallpaper in chats", setChangePic: "Change profile picture", setActiveAcct: "Active account", setThemeSel: "Theme selection", setDarkActive: "Dark mode is on.", setLightActive: "Light mode is on.",
     fpNoSms: "Password reset by SMS is not available. If you are signed in on another device, open Settings > Change password.",
     afErrCode: "Enter the verification code sent by SMS.", afErrVerify: "Verify your phone number first.", afWait: "Please wait...", afNext: "Next", afCreatePw: "Create your password", afEnterPw: "Enter your password", afCreateEnter: "Create account & enter",
     loadFailed: "Couldn't load your messages. Check your connection.", loadRetry: "Try again",
@@ -23,6 +24,7 @@ const extraA = {
     avatarBoyLabel: "Boy avatar",
   },
   hi: {
+    setChatBg: "चैट बैकग्राउंड", setShowWall: "चैट में वॉलपेपर दिखाएँ", setChangePic: "प्रोफ़ाइल फ़ोटो बदलें", setActiveAcct: "सक्रिय खाता", setThemeSel: "थीम चुनें", setDarkActive: "डार्क मोड चालू है।", setLightActive: "लाइट मोड चालू है।",
     fpNoSms: "SMS से पासवर्ड रीसेट उपलब्ध नहीं है। अगर आप किसी दूसरे डिवाइस पर साइन इन हैं, तो सेटिंग > पासवर्ड बदलें खोलें।",
     afErrCode: "SMS से मिला सत्यापन कोड दर्ज करें।", afErrVerify: "पहले अपना फ़ोन नंबर सत्यापित करें।", afWait: "कृपया प्रतीक्षा करें...", afNext: "आगे", afCreatePw: "अपना पासवर्ड बनाएँ", afEnterPw: "अपना पासवर्ड दर्ज करें", afCreateEnter: "खाता बनाएँ और प्रवेश करें",
     loadFailed: "आपके संदेश लोड नहीं हो सके। अपना कनेक्शन जाँचें।", loadRetry: "फिर कोशिश करें",
@@ -46,6 +48,7 @@ const extraA = {
     avatarBoyLabel: "लड़के का अवतार",
   },
   ta: {
+    setChatBg: "அரட்டை பின்னணி", setShowWall: "அரட்டைகளில் வால்பேப்பரைக் காட்டு", setChangePic: "சுயவிவரப் படத்தை மாற்று", setActiveAcct: "செயலில் உள்ள கணக்கு", setThemeSel: "தீம் தேர்வு", setDarkActive: "டார்க் பயன்முறை இயக்கத்தில் உள்ளது.", setLightActive: "லைட் பயன்முறை இயக்கத்தில் உள்ளது.",
     fpNoSms: "SMS மூலம் கடவுச்சொல் மீட்டமைப்பு கிடைக்கவில்லை. வேறொரு சாதனத்தில் உள்நுழைந்திருந்தால், அமைப்புகள் > கடவுச்சொல்லை மாற்று என்பதைத் திறக்கவும்.",
     afErrCode: "SMS மூலம் வந்த சரிபார்ப்புக் குறியீட்டை உள்ளிடவும்.", afErrVerify: "முதலில் உங்கள் தொலைபேசி எண்ணைச் சரிபார்க்கவும்.", afWait: "காத்திருக்கவும்...", afNext: "அடுத்து", afCreatePw: "உங்கள் கடவுச்சொல்லை உருவாக்கவும்", afEnterPw: "உங்கள் கடவுச்சொல்லை உள்ளிடவும்", afCreateEnter: "கணக்கை உருவாக்கி உள்நுழை",
     loadFailed: "உங்கள் செய்திகளை ஏற்ற முடியவில்லை. இணைப்பைச் சரிபார்க்கவும்.", loadRetry: "மீண்டும் முயற்சி",
@@ -69,6 +72,7 @@ const extraA = {
     avatarBoyLabel: "ஆண் அவதார்",
   },
   te: {
+    setChatBg: "చాట్ నేపథ్యం", setShowWall: "చాట్‌లలో వాల్‌పేపర్ చూపించు", setChangePic: "ప్రొఫైల్ చిత్రం మార్చండి", setActiveAcct: "క్రియాశీల ఖాతా", setThemeSel: "థీమ్ ఎంపిక", setDarkActive: "డార్క్ మోడ్ ఆన్‌లో ఉంది.", setLightActive: "లైట్ మోడ్ ఆన్‌లో ఉంది.",
     fpNoSms: "SMS ద్వారా పాస్‌వర్డ్ రీసెట్ అందుబాటులో లేదు. మీరు మరో పరికరంలో సైన్ ఇన్ అయి ఉంటే, సెట్టింగ్‌లు > పాస్‌వర్డ్ మార్చండి తెరవండి.",
     afErrCode: "SMS ద్వారా వచ్చిన ధృవీకరణ కోడ్ నమోదు చేయండి.", afErrVerify: "ముందుగా మీ ఫోన్ నంబర్‌ను ధృవీకరించండి.", afWait: "దయచేసి వేచి ఉండండి...", afNext: "తదుపరి", afCreatePw: "మీ పాస్‌వర్డ్ సృష్టించండి", afEnterPw: "మీ పాస్‌వర్డ్ నమోదు చేయండి", afCreateEnter: "ఖాతా సృష్టించి ప్రవేశించండి",
     loadFailed: "మీ సందేశాలను లోడ్ చేయలేకపోయాం. మీ కనెక్షన్ తనిఖీ చేయండి.", loadRetry: "మళ్లీ ప్రయత్నించండి",
@@ -92,6 +96,7 @@ const extraA = {
     avatarBoyLabel: "అబ్బాయి అవతార్",
   },
   bn: {
+    setChatBg: "চ্যাট ব্যাকগ্রাউন্ড", setShowWall: "চ্যাটে ওয়ালপেপার দেখান", setChangePic: "প্রোফাইল ছবি পরিবর্তন করুন", setActiveAcct: "সক্রিয় অ্যাকাউন্ট", setThemeSel: "থিম নির্বাচন", setDarkActive: "ডার্ক মোড চালু আছে।", setLightActive: "লাইট মোড চালু আছে।",
     fpNoSms: "SMS-এর মাধ্যমে পাসওয়ার্ড রিসেট উপলব্ধ নেই। আপনি অন্য ডিভাইসে সাইন ইন থাকলে সেটিংস > পাসওয়ার্ড পরিবর্তন করুন খুলুন।",
     afErrCode: "SMS-এ পাঠানো যাচাইকরণ কোড লিখুন।", afErrVerify: "আগে আপনার ফোন নম্বর যাচাই করুন।", afWait: "অনুগ্রহ করে অপেক্ষা করুন...", afNext: "পরবর্তী", afCreatePw: "আপনার পাসওয়ার্ড তৈরি করুন", afEnterPw: "আপনার পাসওয়ার্ড লিখুন", afCreateEnter: "অ্যাকাউন্ট তৈরি করে প্রবেশ করুন",
     loadFailed: "আপনার বার্তা লোড করা যায়নি। সংযোগ পরীক্ষা করুন।", loadRetry: "আবার চেষ্টা করুন",
@@ -115,6 +120,7 @@ const extraA = {
     avatarBoyLabel: "ছেলের অ্যাভাটার",
   },
   mr: {
+    setChatBg: "चॅट पार्श्वभूमी", setShowWall: "चॅटमध्ये वॉलपेपर दाखवा", setChangePic: "प्रोफाइल फोटो बदला", setActiveAcct: "सक्रिय खाते", setThemeSel: "थीम निवड", setDarkActive: "डार्क मोड चालू आहे.", setLightActive: "लाइट मोड चालू आहे.",
     fpNoSms: "SMS द्वारे पासवर्ड रीसेट उपलब्ध नाही. तुम्ही दुसऱ्या डिव्हाइसवर साइन इन असाल तर सेटिंग्ज > पासवर्ड बदला उघडा.",
     afErrCode: "SMS द्वारे आलेला पडताळणी कोड टाका.", afErrVerify: "आधी तुमचा फोन नंबर पडताळा.", afWait: "कृपया प्रतीक्षा करा...", afNext: "पुढे", afCreatePw: "तुमचा पासवर्ड तयार करा", afEnterPw: "तुमचा पासवर्ड टाका", afCreateEnter: "खाते तयार करा आणि प्रवेश करा",
     loadFailed: "तुमचे संदेश लोड होऊ शकले नाहीत. कनेक्शन तपासा.", loadRetry: "पुन्हा प्रयत्न करा",
@@ -138,6 +144,7 @@ const extraA = {
     avatarBoyLabel: "मुलाचा अवतार",
   },
   pa: {
+    setChatBg: "ਚੈਟ ਬੈਕਗ੍ਰਾਊਂਡ", setShowWall: "ਚੈਟ ਵਿੱਚ ਵਾਲਪੇਪਰ ਦਿਖਾਓ", setChangePic: "ਪ੍ਰੋਫ਼ਾਈਲ ਫੋਟੋ ਬਦਲੋ", setActiveAcct: "ਸਰਗਰਮ ਖਾਤਾ", setThemeSel: "ਥੀਮ ਚੋਣ", setDarkActive: "ਡਾਰਕ ਮੋਡ ਚਾਲੂ ਹੈ।", setLightActive: "ਲਾਈਟ ਮੋਡ ਚਾਲੂ ਹੈ।",
     fpNoSms: "SMS ਰਾਹੀਂ ਪਾਸਵਰਡ ਰੀਸੈੱਟ ਉਪਲਬਧ ਨਹੀਂ ਹੈ। ਜੇ ਤੁਸੀਂ ਕਿਸੇ ਹੋਰ ਡਿਵਾਈਸ ਤੇ ਸਾਈਨ ਇਨ ਹੋ, ਤਾਂ ਸੈਟਿੰਗਾਂ > ਪਾਸਵਰਡ ਬਦਲੋ ਖੋਲ੍ਹੋ।",
     afErrCode: "SMS ਰਾਹੀਂ ਆਇਆ ਤਸਦੀਕ ਕੋਡ ਦਰਜ ਕਰੋ।", afErrVerify: "ਪਹਿਲਾਂ ਆਪਣਾ ਫ਼ੋਨ ਨੰਬਰ ਤਸਦੀਕ ਕਰੋ।", afWait: "ਕਿਰਪਾ ਕਰਕੇ ਉਡੀਕ ਕਰੋ...", afNext: "ਅੱਗੇ", afCreatePw: "ਆਪਣਾ ਪਾਸਵਰਡ ਬਣਾਓ", afEnterPw: "ਆਪਣਾ ਪਾਸਵਰਡ ਦਰਜ ਕਰੋ", afCreateEnter: "ਖਾਤਾ ਬਣਾਓ ਅਤੇ ਦਾਖਲ ਹੋਵੋ",
     loadFailed: "ਤੁਹਾਡੇ ਸੁਨੇਹੇ ਲੋਡ ਨਹੀਂ ਹੋ ਸਕੇ। ਆਪਣਾ ਕਨੈਕਸ਼ਨ ਜਾਂਚੋ।", loadRetry: "ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ",
@@ -161,6 +168,7 @@ const extraA = {
     avatarBoyLabel: "ਮੁੰਡੇ ਦਾ ਅਵਤਾਰ",
   },
   gu: {
+    setChatBg: "ચેટ બેકગ્રાઉન્ડ", setShowWall: "ચેટમાં વૉલપેપર બતાવો", setChangePic: "પ્રોફાઇલ ફોટો બદલો", setActiveAcct: "સક્રિય એકાઉન્ટ", setThemeSel: "થીમ પસંદગી", setDarkActive: "ડાર્ક મોડ ચાલુ છે.", setLightActive: "લાઇટ મોડ ચાલુ છે.",
     fpNoSms: "SMS દ્વારા પાસવર્ડ રીસેટ ઉપલબ્ધ નથી. જો તમે બીજા ડિવાઇસ પર સાઇન ઇન હો, તો સેટિંગ્સ > પાસવર્ડ બદલો ખોલો.",
     afErrCode: "SMS દ્વારા મળેલો ચકાસણી કોડ દાખલ કરો.", afErrVerify: "પહેલા તમારો ફોન નંબર ચકાસો.", afWait: "કૃપા કરીને રાહ જુઓ...", afNext: "આગળ", afCreatePw: "તમારો પાસવર્ડ બનાવો", afEnterPw: "તમારો પાસવર્ડ દાખલ કરો", afCreateEnter: "એકાઉન્ટ બનાવો અને પ્રવેશ કરો",
     loadFailed: "તમારા સંદેશા લોડ થઈ શક્યા નહીં. કનેક્શન તપાસો.", loadRetry: "ફરી પ્રયાસ કરો",

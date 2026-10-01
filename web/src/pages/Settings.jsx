@@ -36,6 +36,7 @@ import { Image as ImageIcon } from "lucide-react";
 // Saving uses localStorage key "chatWallpaper" (the wallpaper *file* path, or null).
 // A CustomEvent "chatWallpaperChange" notifies ChatView in the same tab immediately.
 function WallpaperPickerSection({ colors }) {
+  const { t } = useI18n();
   const [manifest, setManifest] = useState([]);
   const [selected, setSelected] = useState(() => {
     try { return localStorage.getItem("chatWallpaper") || null; } catch { return null; }
@@ -82,15 +83,15 @@ function WallpaperPickerSection({ colors }) {
     <>
       <label style={labelStyle}>
         <ImageIcon size={12} style={{ verticalAlign: "middle", marginRight: 5 }} />
-        Chat Background
+        {t("setChatBg")}
       </label>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-        <span style={{ fontSize: 14, color: colors.textPrimary }}>Show wallpaper in chats</span>
+        <span style={{ fontSize: 14, color: colors.textPrimary }}>{t("setShowWall")}</span>
         <button
           type="button"
           role="switch"
           aria-checked={on}
-          aria-label="Show wallpaper in chats"
+          aria-label={t("setShowWall")}
           disabled={!on && !firstFile}
           onClick={toggleWallpaper}
           style={{
@@ -417,8 +418,8 @@ export default function Settings({ me: initialMe, onBack, onUpdated }) {
                   className="avatar-edit-btn"
                   onClick={() => setShowAvatarMenu((v) => !v)}
                   disabled={avatarBusy}
-                  title="Change profile picture"
-                  aria-label="Change profile picture"
+                  title={t("setChangePic")}
+                  aria-label={t("setChangePic")}
                   style={{
                     position: "absolute",
                     right: -2,
@@ -486,7 +487,7 @@ export default function Settings({ me: initialMe, onBack, onUpdated }) {
                 }}
               >
                 <ShieldCheck size={14} strokeWidth={2.2} />
-                <span>Active Account</span>
+                <span>{t("setActiveAcct")}</span>
               </span>
             </div>
 
@@ -676,7 +677,7 @@ export default function Settings({ me: initialMe, onBack, onUpdated }) {
               </p>
               <div
                 role="group"
-                aria-label="Theme selection"
+                aria-label={t("setThemeSel")}
                 style={{
                   display: "grid",
                   gridTemplateColumns: "repeat(3, 1fr)",
@@ -723,10 +724,10 @@ export default function Settings({ me: initialMe, onBack, onUpdated }) {
               </div>
               <div style={{ fontSize: 12, color: colors.textSecondary, marginTop: 8 }}>
                 {themeMode === "dark"
-                  ? "Dark mode active."
+                  ? t("setDarkActive")
                   : themeMode === "auto"
                   ? "Following device system preference automatically."
-                  : "Light mode active."}
+                  : t("setLightActive")}
               </div>
             </div>
 
