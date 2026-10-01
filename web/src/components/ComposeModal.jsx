@@ -163,7 +163,8 @@ export default function ComposeModal({ onClose, onSend, onSaveDraft, initialDraf
   const [attachments, setAttachments] = useState(initialDraft?.attachments || []);
   const draftIdRef = useRef(initialDraft?.draftId || null);
   const [uploading, setUploading]     = useState(false);
-  const [error, setError]             = useState("");
+  const [error, setError] = useState("");
+  const [attachWarned, setAttachWarned] = useState(false);
   const fileInputRef                  = useRef(null);
 
   // ── Voice-to-Text ─────────────────────────────────────────────────────────
@@ -292,6 +293,7 @@ export default function ComposeModal({ onClose, onSend, onSaveDraft, initialDraf
     e.preventDefault();
     setError("");
     if (!body.trim() && attachments.length === 0) return setError(t("composeEmpty"));
+    if (!attachWarned && attachments.length === 0 && /attach|enclosed|संलग्न/i.test(body)) { setAttachWarned(true); return setError(t("composeAttachAsk")); }
     if (recipients.length === 0) {
       if (recipientInput.trim()) {
         addRecipientByPhone();
