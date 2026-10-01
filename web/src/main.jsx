@@ -50,8 +50,12 @@ function whenRendered(cb) {
   tick();
 }
 whenRendered(() => {
-  const wait = Math.max(0, splashMinMs - (Date.now() - splashStartedAt));
-  setTimeout(finishSplash, wait);
+  const go = () => {
+    const wait = Math.max(0, splashMinMs - (Date.now() - splashStartedAt));
+    setTimeout(finishSplash, wait);
+  };
+  const pollWp = () => { if (window.__wpReady) go(); else setTimeout(pollWp, 50); };
+  pollWp();
 });
 // Safety: remove the splash after 8 s even if React never rendered.
 setTimeout(finishSplash, 8000);

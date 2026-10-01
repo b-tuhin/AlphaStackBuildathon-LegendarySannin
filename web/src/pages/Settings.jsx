@@ -358,6 +358,11 @@ export default function Settings({ me: initialMe, onBack, onUpdated }) {
         background: colors.bg,
         color: colors.textPrimary,
         padding: isNarrow ? "8px" : "24px 16px 48px",
+        backgroundImage: (() => { try { return localStorage.getItem("chatWallpaper") === "none"; } catch { return false; } })() ? "none" : "url(" + getAsset(isDark ? "wallpaper-doodle-dark" : "wallpaper-doodle-light").url + ")",
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "center",
+        backgroundAttachment: "fixed",
+        backgroundSize: "cover",
       }}
     >
       <div style={{ maxWidth: 640, margin: "0 auto" }}>

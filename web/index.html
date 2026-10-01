@@ -7,32 +7,38 @@
     <meta name="theme-color" content="#1F3A6E" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#161513" media="(prefers-color-scheme: dark)" />
 
-    <title>Bharat Chat — Official Civic Email Service</title>
+    <title>Bharat Chat</title>
     <meta name="description" content="Bharat Chat provides official, accessible, phone-number-based civic email service for every citizen." />
 
     <!-- Open Graph / Social Sharing -->
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Bharat Chat — Official Civic Email Service" />
+    <meta property="og:title" content="Bharat Chat" />
     <meta property="og:description" content="Secure, accessible, phone-number-based civic email communication for all citizens." />
     <meta property="og:image" content="/assets/login-desktop.webp" />
 
     <!-- Twitter Cards -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Bharat Chat — Official Civic Email Service" />
+    <meta name="twitter:title" content="Bharat Chat" />
     <meta name="twitter:description" content="Secure, accessible, phone-number-based civic email communication for all citizens." />
     <meta name="twitter:image" content="/assets/login-desktop.webp" />
 
     <script>
       window.__splashStart = Date.now();
-      try { if (localStorage.getItem("phonemail_web_theme") === "dark") document.documentElement.setAttribute("data-splash-dark", "1"); } catch (e) {}
+      try { if (localStorage.getItem("phonemail_web_theme") === "dark") document.documentElement.setAttribute("data-splash-dark", "1"); } catch (e) {} try { if (localStorage.getItem("chatWallpaper") === "none") document.documentElement.setAttribute("data-splash-nowp", "1"); } catch (e) {} try { var wd = localStorage.getItem("phonemail_web_theme") === "dark"; var wn = localStorage.getItem("chatWallpaper") === "none"; var wr = window.devicePixelRatio || 1; document.documentElement.style.setProperty("--splash-wp-size", Math.round(2560 / wr) + "px " + Math.round(1440 / wr) + "px"); if (wn) { window.__wpReady = true; } else { var wi = new Image(); wi.onload = wi.onerror = function () { window.__wpReady = true; }; wi.src = wd ? "/assets/wallpaper-doodle-dark.png" : "/assets/wallpaper-doodle-light.png"; } } catch (e) { window.__wpReady = true; }
     </script>
     <style>
       #splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #FBF6F4; z-index: 9999; transition: opacity 300ms ease; }
       html[data-splash-dark="1"] #splash { background: #121212; }
-      .splash-logo { width: 160px; height: 160px; object-fit: contain; }
-      .splash-name { margin-top: 16px; font: 700 28px/1.2 "Noto Sans", sans-serif; color: #2A1A20; }
+    #splash { background-image: url(/assets/wallpaper-doodle-light.png); background-repeat: no-repeat; background-position: center; background-size: var(--splash-wp-size, cover); }
+    html[data-splash-dark="1"] #splash { background-image: url(/assets/wallpaper-doodle-dark.png); }
+    html[data-splash-nowp="1"] #splash { background-image: none; }
+      .splash-logo { width: 240px; height: 240px; object-fit: contain; }
+      .splash-name { margin-top: 20px; font: 800 36px/1.2 "Noto Sans", sans-serif; letter-spacing: 0.1em; color: #2A1A20; }
       html[data-splash-dark="1"] .splash-name { color: #ECECEC; }
-      @media (max-width: 480px) { .splash-logo { width: 140px; height: 140px; } }
+      @media (max-width: 480px) { .splash-logo { width: 200px; height: 200px; } .splash-name { font-size: 30px; } }
+      .splash-bar { margin-top: 28px; width: 180px; height: 4px; border-radius: 4px; background: rgba(128,128,128,0.25); overflow: hidden; }
+      .splash-bar-fill { width: 100%; height: 100%; border-radius: 4px; background: var(--primary, #E91E63); transform: scaleX(0); transform-origin: left center; animation: splashbar 3.2s ease-out forwards; }
+      @keyframes splashbar { to { transform: scaleX(1); } }
     </style>
     <!-- Early theme detection to avoid flash of wrong theme before first paint -->
     <script>
@@ -55,13 +61,14 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap"
     />
-    <link rel="icon" type="image/png" href="/assets/logo-mark.png" />
+    <link rel="icon" type="image/png" href="/favicon-tab.png" />
     <link rel="manifest" href="/manifest.json" />
   </head>
   <body>
     <div id="splash">
       <img class="splash-logo" src="/assets/logo-mark.png" alt="" />
       <div class="splash-name">Bharat Chat</div>
+      <div class="splash-bar"><div class="splash-bar-fill"></div></div>
     </div>
     <!-- Skip to main content — WCAG 2.4.1 -->
     <a href="#main-content" class="skip-link">Skip to main content</a>
