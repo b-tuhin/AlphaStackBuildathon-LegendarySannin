@@ -437,7 +437,7 @@ function ThreadRow({
             }}
           >
             {hasAttachments && (
-              <Paperclip size={12} strokeWidth={2} color={colors.textSecondary} style={{ flexShrink: 0 }} title="Has attachment" />
+              <Paperclip size={12} strokeWidth={2} color={colors.textSecondary} style={{ flexShrink: 0 }} title={t("tlAttach")} />
             )}
             {isThread && !item.is_group ? (
               (item.subject && typeof item.subject === "string" && item.subject.trim() && item.subject.trim() !== "(no subject)" && !/^[\-\u2013\u2014\s]+$/.test(item.subject)) ? (
@@ -452,7 +452,7 @@ function ThreadRow({
                       marginRight: 4,
                       opacity: 0.6,
                     }}
-                    title="No subject"
+                    title={t("tlNoSubject")}
                   >
                   </span>
                   {query ? highlightText(snippet, query) : snippet}
@@ -486,7 +486,7 @@ function ThreadRow({
             {folder !== "home" && onRestore && (
               <button
                 type="button"
-                title="Restore to Inbox"
+                title={t("tlRestore")}
                 onClick={(e) => { e.stopPropagation(); onRestore(item); }}
                 className="icon-btn"
                 style={{
@@ -508,7 +508,7 @@ function ThreadRow({
               ref={triggerRef}
               type="button"
               data-ui-exempt="true"
-              title="More actions"
+              title={t("moreActions")}
               aria-label="More actions"
               onClick={(e) => {
                 e.stopPropagation();

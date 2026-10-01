@@ -1,6 +1,7 @@
 import React, { useState, useRef } from "react";
 import { Archive, Trash2, Paperclip, Clock, AlertTriangle } from "lucide-react";
 import { useTheme } from "../theme/ThemeContext.jsx";
+import { parseServerDate } from "../utils/dateFix.js";
 
 // ── Display name helper (fixes raw phone-number legibility) ──────────────────
 function senderLabel(email) {
@@ -154,7 +155,7 @@ function SwipeableEmailRow({ email, selectedId, onSelect, onRetry, onDelete, onA
 
         {!isSending && !isFailed && !isWaiting && (
           <span style={{ color: colors.textSecondary, fontSize: 12, width: 80, textAlign: "right" }}>
-            {new Date(email.created_at).toLocaleDateString()}
+            {parseServerDate(email.created_at).toLocaleDateString()}
           </span>
         )}
       </div>

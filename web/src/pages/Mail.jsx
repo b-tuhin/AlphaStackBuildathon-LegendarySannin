@@ -846,7 +846,7 @@ export default function Mail() {
                       }}
                     >
                       {folder === "home"
-                        ? "Chats"
+                        ? t("mailChats")
                         : folder === "important"
                         ? t("folderImportant")
                         : folder === "drafts"
@@ -855,7 +855,7 @@ export default function Mail() {
                         ? t("folderSpam")
                         : folder === "trash"
                         ? t("folderTrash")
-                        : "Chats"}
+                        : t("mailChats")}
                     </h1>
                   </div>
                   {(folder === "trash" || folder === "spam") && items.length > 0 && (

@@ -4099,7 +4099,7 @@ export default function ChatView({
           >
             {contactLoading ? (
               <div style={{ textAlign: "center", padding: 30, color: colors.textSecondary }}>
-                Loading profile…
+                {t("profLoading")}
               </div>
             ) : (
               <>
@@ -4134,16 +4134,16 @@ export default function ChatView({
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                    <span style={{ color: "var(--muted)", fontWeight: 500 }}>Email:</span>
+                    <span style={{ color: "var(--muted)", fontWeight: 500 }}>{t("profEmail")}</span>
                     <span style={{ color: colors.textPrimary, wordBreak: "break-all" }}>
-                      {contactProfile?.email_address || thread?.counterpart || "No email"}
+                      {contactProfile?.email_address || thread?.counterpart || t("profNoEmail")}
                     </span>
                   </div>
 
                   {Array.isArray(contactProfile?.aliases) && contactProfile.aliases.length > 0 && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: colors.textSecondary }}>
-                        Aliases:
+                        {t("profAliases")}
                       </span>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                         {contactProfile.aliases.map((al) => (

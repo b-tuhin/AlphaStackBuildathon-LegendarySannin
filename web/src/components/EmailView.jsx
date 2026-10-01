@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { parseServerDate } from "../utils/dateFix.js";
 import { updateEmail, downloadAttachment, BASE_URL } from "../api/client.js";
 import { useTheme } from "../theme/ThemeContext.jsx";
+import { useI18n } from "../i18n/I18nContext.jsx";
 import { Reply, Trash2, ShieldAlert, Star, Volume2, VolumeX, FileText, Download, Check, CheckCheck, ArrowRight } from "lucide-react";
 import {
   VOICE_LANGUAGES,
@@ -32,11 +33,12 @@ function resolveTo(email) {
 
 export default function EmailView({ email, refreshList, onReply }) {
   const { colors } = useTheme();
+  const { t } = useI18n();
 
   if (!email) {
     return (
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: colors.textSecondary, background: colors.surface }}>
-        Select an email to read it.
+        {t("evSelect")}
       </div>
     );
   }
@@ -111,20 +113,20 @@ export default function EmailView({ email, refreshList, onReply }) {
                 fontSize: 13,
                 fontWeight: 600,
               }}
-              title="Reply to message"
+              title={t("evReplyTitle")}
               onClick={() => onReply(email)}
             >
               <Reply size={14} />
-              <span>Reply</span>
+              <span>{t("replyDirectly")}</span>
             </button>
           )}
-          <button type="button" className="icon-btn" style={{ border: "none", background: "none", cursor: "pointer", padding: "6px", display: "flex", alignItems: "center" }} title="Move to trash" onClick={() => act({ folder: "trash" })}>
+          <button type="button" className="icon-btn" style={{ border: "none", background: "none", cursor: "pointer", padding: "6px", display: "flex", alignItems: "center" }} title={t("moveToTrash")} onClick={() => act({ folder: "trash" })}>
             <Trash2 size={17} color={colors.textSecondary} />
           </button>
-          <button type="button" className="icon-btn" style={{ border: "none", background: "none", cursor: "pointer", padding: "6px", display: "flex", alignItems: "center" }} title="Mark as spam" onClick={() => act({ folder: "spam" })}>
+          <button type="button" className="icon-btn" style={{ border: "none", background: "none", cursor: "pointer", padding: "6px", display: "flex", alignItems: "center" }} title={t("evSpam")} onClick={() => act({ folder: "spam" })}>
             <ShieldAlert size={17} color={colors.textSecondary} />
           </button>
-          <button type="button" className="icon-btn" style={{ border: "none", background: "none", cursor: "pointer", padding: "6px", display: "flex", alignItems: "center" }} title="Favorite" onClick={() => act({ is_favorite: email.is_favorite ? 0 : 1 })}>
+          <button type="button" className="icon-btn" style={{ border: "none", background: "none", cursor: "pointer", padding: "6px", display: "flex", alignItems: "center" }} title={t("evFavorite")} onClick={() => act({ is_favorite: email.is_favorite ? 0 : 1 })}>
             <Star size={17} fill={email.is_favorite ? "var(--important)" : "none"} color={email.is_favorite ? "var(--important)" : colors.textSecondary} />
           </button>
         </div>
@@ -154,7 +156,7 @@ export default function EmailView({ email, refreshList, onReply }) {
                 value={ttsLang}
                 onChange={handleTtsLangChange}
                 options={VOICE_LANGUAGES}
-                title="Voice language for reading aloud"
+                title={t("evVoiceLang")}
               />
             </div>
           </div>
